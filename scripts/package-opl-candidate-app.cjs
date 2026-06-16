@@ -121,17 +121,23 @@ const manifest = {
     strategy: 'preserve_official_hermes_backend_first',
     official_backend: 'Hermes first-launch bootstrap / hermes dashboard',
     opl_defaults_seed: 'electron/opl-defaults.cjs seeds openai_runtime=codex_app_server and MAS/MAG/RCA skills.external_dirs without replacing backend',
-    executor_bridge_reference: 'electron/opl-codex-gateway.cjs declares replacesHermesBackend=false and is not the default backend',
+    executor_bridge_reference: 'electron/opl-codex-gateway.cjs exposes Hermes-compatible session.create/prompt.submit backed by codex app-server --listen stdio://',
+    protocol_mapping: {
+      'session.create': 'thread/start',
+      'prompt.submit': 'turn/start',
+      'item/agentMessage/delta': 'message.delta',
+      'turn/completed': 'message.complete'
+    },
     planned_opl_executor_adapter: 'deeper OPL app state/action and route receipts above Hermes native backend',
     forbidden_strategy: 'full backend replacement with minimal Codex shim',
     hermes_runtime_authority_transfer: false,
-    codex_cli_command_reference: 'codex exec --json <prompt>'
+    codex_runtime_reference: 'codex app-server --listen stdio://'
   },
   implemented_capabilities: [
     'official_hermes_desktop_ui_reused',
     'official_hermes_backend_preserved',
     'opl_defaults_seed_for_codex_runtime_and_domain_skills',
-    'codex_bridge_scope_guard_reference',
+    'codex_app_server_backed_hermes_gateway_adapter',
     'opl_branding_and_icon_replaced',
     'candidate_app_bundle_package'
   ],

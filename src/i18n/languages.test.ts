@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_LOCALE, isLocale, isSupportedLocaleValue, localeConfigValue, normalizeLocale } from './languages'
+import {
+  browserLocale,
+  DEFAULT_LOCALE,
+  isLocale,
+  isSupportedLocaleValue,
+  localeConfigValue,
+  normalizeLocale
+} from './languages'
 
 describe('desktop i18n languages', () => {
   it('normalizes supported locale aliases', () => {
@@ -39,5 +46,28 @@ describe('desktop i18n languages', () => {
     expect(localeConfigValue('zh')).toBe('zh')
     expect(localeConfigValue('zh-hant')).toBe('zh-hant')
     expect(localeConfigValue('ja')).toBe('ja')
+  })
+
+  it('uses the browser language list as the first-render locale default', () => {
+    const originalLanguages = Object.getOwnPropertyDescriptor(window.navigator, 'languages')
+    const originalLanguage = Object.getOwnPropertyDescriptor(window.navigator, 'language')
+
+    Object.defineProperty(window.navigator, 'languages', {
+      configurable: true,
+      value: ['zh-CN', 'en-US']
+    })
+    Object.defineProperty(window.navigator, 'language', {
+      configurable: true,
+      value: 'en-US'
+    })
+
+    expect(browserLocale()).toBe('zh')
+
+    if (originalLanguages) {
+      Object.defineProperty(window.navigator, 'languages', originalLanguages)
+    }
+    if (originalLanguage) {
+      Object.defineProperty(window.navigator, 'language', originalLanguage)
+    }
   })
 })

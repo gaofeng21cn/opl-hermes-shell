@@ -81,6 +81,25 @@ export function isSupportedLocaleValue(value: unknown): boolean {
   return typeof value === 'string' && LOCALE_ALIASES[value.trim().toLowerCase()] != null
 }
 
+export function browserLocale(): Locale {
+  if (typeof navigator === 'undefined') {
+    return DEFAULT_LOCALE
+  }
+
+  const candidates = [
+    ...(Array.isArray(navigator.languages) ? navigator.languages : []),
+    navigator.language
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    if (isSupportedLocaleValue(candidate)) {
+      return normalizeLocale(candidate)
+    }
+  }
+
+  return DEFAULT_LOCALE
+}
+
 export function localeConfigValue(locale: Locale): string {
   return LOCALE_OPTIONS.find(item => item.id === locale)?.configValue ?? DEFAULT_LOCALE
 }

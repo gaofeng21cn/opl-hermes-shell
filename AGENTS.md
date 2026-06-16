@@ -11,8 +11,9 @@ Rules:
 - Do not add OPL App state/action, page-state, first-run, Full runtime, or
   release-gate surfaces until they have a Hermes feature comparison and an
   App-owned adoption gate.
-- Keep the first candidate bridge small: OPL branding plus a Codex CLI adapter,
-  while preserving the upstream Hermes Desktop feature shape for comparison.
+- Keep the first candidate bridge small: OPL branding plus a Hermes-compatible
+  Codex app-server adapter, while preserving the upstream Hermes Desktop
+  feature shape for comparison.
 - Treat `docs/opl-hermes-upstream-strategy.md` as the local guide for upstream
   upgrades and OPL customization. Follow upstream Hermes Desktop first, then
   reapply the smallest OPL delta; do not redesign large UI areas without a

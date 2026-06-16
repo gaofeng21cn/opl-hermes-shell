@@ -12,6 +12,28 @@ import {
   submitOnboardingCode
 } from './onboarding'
 
+function ensureLocalStorage() {
+  if (window.localStorage) {
+    return
+  }
+
+  const store = new Map<string, string>()
+
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => store.clear(),
+      getItem: (key: string) => store.get(key) ?? null,
+      key: (index: number) => [...store.keys()][index] ?? null,
+      removeItem: (key: string) => store.delete(key),
+      setItem: (key: string, value: string) => store.set(key, String(value)),
+      get length() {
+        return store.size
+      }
+    }
+  })
+}
+
 function provider(id: string, name = id): OAuthProvider {
   return {
     cli_command: `hermes login ${id}`,
@@ -48,7 +70,7 @@ function installApiMock(api: (request: { path: string }) => Promise<unknown>) {
 function runtimeMismatchGateway(): OnboardingContext['requestGateway'] {
   return async method => {
     if (method === 'setup.status') {
-      return { provider_configured: true } as never
+      return { provider_configured: false } as never
     }
 
     if (method === 'setup.runtime_check') {
@@ -65,6 +87,7 @@ function onboardingContext(requestGateway: OnboardingContext['requestGateway']):
 
 describe('refreshOnboarding', () => {
   beforeEach(() => {
+    ensureLocalStorage()
     window.localStorage.clear()
     $desktopOnboarding.set(baseState())
   })
@@ -94,7 +117,6 @@ describe('refreshOnboarding', () => {
     expect(api).toHaveBeenCalledTimes(1)
     expect($desktopOnboarding.get().providers?.map(p => p.id)).toEqual(['fresh'])
     expect($desktopOnboarding.get().reason).toContain('Selected runtime is not available.')
-    expect($desktopOnboarding.get().reason).toContain('setup.status reports configured credentials')
   })
 
   it('keeps cached providers when onboarding was not re-requested', async () => {
@@ -146,10 +168,38 @@ describe('refreshOnboarding', () => {
 
     expect($desktopOnboarding.get().providers?.map(p => p.id)).toEqual(['shared'])
   })
+
+  it('completes immediately when setup.status already reports configured model access', async () => {
+    const calls: string[] = []
+    const onCompleted = vi.fn()
+    const ready = await refreshOnboarding({
+      onCompleted,
+      requestGateway: async method => {
+        calls.push(method)
+
+        if (method === 'setup.status') {
+          return { provider_configured: true } as never
+        }
+
+        if (method === 'setup.runtime_check') {
+          throw new Error('setup.runtime_check should not block configured first run')
+        }
+
+        throw new Error(`unexpected gateway method: ${method}`)
+      }
+    })
+
+    expect(ready).toBe(true)
+    expect(onCompleted).toHaveBeenCalledTimes(1)
+    expect(calls).toEqual(['setup.status'])
+    expect($desktopOnboarding.get().configured).toBe(true)
+    expect($desktopOnboarding.get().reason).toBeNull()
+  })
 })
 
 describe('OAuth onboarding', () => {
   beforeEach(() => {
+    ensureLocalStorage()
     window.localStorage.clear()
     $desktopOnboarding.set(baseState())
   })
@@ -246,6 +296,7 @@ describe('OAuth onboarding', () => {
 
 describe('saveOnboardingLocalEndpoint', () => {
   beforeEach(() => {
+    ensureLocalStorage()
     window.localStorage.clear()
     $desktopOnboarding.set(baseState())
   })

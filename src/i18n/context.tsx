@@ -3,7 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { getHermesConfigRecord, type HermesConfigRecord, saveHermesConfig } from '@/hermes'
 
 import { TRANSLATIONS } from './catalog'
-import { DEFAULT_LOCALE, localeConfigValue, normalizeLocale } from './languages'
+import { browserLocale, DEFAULT_LOCALE, isSupportedLocaleValue, localeConfigValue, normalizeLocale } from './languages'
 import { setRuntimeI18nLocale } from './runtime'
 import type { Locale, Translations } from './types'
 
@@ -51,6 +51,11 @@ export function withConfigDisplayLanguage(config: HermesConfigRecord, locale: Lo
   }
 }
 
+function configuredLocaleOrNull(config: HermesConfigRecord): Locale | null {
+  const configured = getConfigDisplayLanguage(config)
+  return isSupportedLocaleValue(configured) ? normalizeLocale(configured) : null
+}
+
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
@@ -82,7 +87,13 @@ export interface I18nProviderProps {
 }
 
 export function I18nProvider({ children, configClient = defaultConfigClient, initialLocale }: I18nProviderProps) {
-  const [locale, setLocaleState] = useState<Locale>(() => normalizeLocale(initialLocale))
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    if (initialLocale !== undefined) {
+      return normalizeLocale(initialLocale)
+    }
+
+    return browserLocale()
+  })
   const [isLoadingConfig, setIsLoadingConfig] = useState(false)
   const [isSavingLocale, setIsSavingLocale] = useState(false)
   const [configLoadError, setConfigLoadError] = useState<Error | null>(null)
@@ -108,13 +119,15 @@ export function I18nProvider({ children, configClient = defaultConfigClient, ini
       .getConfig()
       .then(config => {
         if (!cancelled) {
-          setLocaleState(normalizeLocale(getConfigDisplayLanguage(config)))
+          const configuredLocale = configuredLocaleOrNull(config)
+          if (configuredLocale) {
+            setLocaleState(configuredLocale)
+          }
         }
       })
       .catch(error => {
         if (!cancelled) {
           setConfigLoadError(toError(error))
-          setLocaleState(DEFAULT_LOCALE)
         }
       })
       .finally(() => {

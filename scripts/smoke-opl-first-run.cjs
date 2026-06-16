@@ -106,7 +106,51 @@ console.error('unexpected opl command: ' + args.join(' '))
 process.exit(42)
 `)
   writeExecutable(path.join(binDir, 'codex'), `#!/usr/bin/env node
-console.log(JSON.stringify({ content: 'fixture codex response' }))
+const args = process.argv.slice(2)
+if (args.join(' ') !== 'app-server --listen stdio://') {
+  console.error('unexpected codex command: ' + args.join(' '))
+  process.exit(42)
+}
+let buffer = ''
+function write(message) {
+  process.stdout.write(JSON.stringify(message) + '\\n')
+}
+function respond(id, result) {
+  write({ jsonrpc: '2.0', id, result })
+}
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', chunk => {
+  buffer += chunk
+  let newlineIndex = buffer.indexOf('\\n')
+  while (newlineIndex >= 0) {
+    const line = buffer.slice(0, newlineIndex).trim()
+    buffer = buffer.slice(newlineIndex + 1)
+    if (line) handle(JSON.parse(line))
+    newlineIndex = buffer.indexOf('\\n')
+  }
+})
+function handle(request) {
+  if (request.method === 'initialize') {
+    respond(request.id, { serverInfo: { name: 'fixture-codex-app-server', version: '0.0.0' } })
+    return
+  }
+  if (request.method === 'thread/start') {
+    respond(request.id, { thread: { id: 'thread-fixture' }, cwd: request.params?.cwd || process.cwd() })
+    return
+  }
+  if (request.method === 'turn/start') {
+    respond(request.id, { turn: { id: 'turn-fixture', status: 'running' } })
+    write({ jsonrpc: '2.0', method: 'turn/started', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'running' } } })
+    write({ jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { threadId: request.params?.threadId || 'thread-fixture', turnId: 'turn-fixture', delta: 'fixture codex response' } })
+    write({ jsonrpc: '2.0', method: 'turn/completed', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'completed' } } })
+    return
+  }
+  if (request.method === 'turn/abort') {
+    respond(request.id, { ok: true })
+    return
+  }
+  write({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'unsupported fixture method ' + request.method } })
+}
 `)
   return binDir
 }
@@ -180,7 +224,7 @@ async function runCase(name, apiKeyPresent) {
     const oauth = await getJson(baseUrl, '/api/providers/oauth')
     assert(Array.isArray(oauth.providers) && oauth.providers.length === 0, `${name}: OAuth provider route is not renderer-safe empty list`)
     const status = await getJson(baseUrl, '/api/status')
-    assert(status.backend === 'codex-cli-adapter', `${name}: status backend is not Codex adapter`)
+    assert(status.backend === 'codex-app-server-adapter', `${name}: status backend is not Codex app-server adapter`)
     assert(status.provider_configured === apiKeyPresent, `${name}: provider_configured mismatch`)
     await sleep(500)
     text = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8') : text

@@ -18,6 +18,17 @@ function existingDirectories(paths) {
   })
 }
 
+function defaultLanguageFromLocale(locale) {
+  const value = String(locale || '').trim().toLowerCase().replace(/_/g, '-')
+  if (!value) return 'en'
+  if (value === 'zh' || value.startsWith('zh-cn') || value.startsWith('zh-hans')) return 'zh'
+  if (value.startsWith('zh-tw') || value.startsWith('zh-hk') || value.startsWith('zh-mo') || value.startsWith('zh-hant')) {
+    return 'zh-hant'
+  }
+  if (value === 'ja' || value.startsWith('ja-')) return 'ja'
+  return 'en'
+}
+
 function seedScript() {
   return String.raw`
 import json
@@ -86,7 +97,13 @@ print(json.dumps({
 `
 }
 
-function seedOplHermesDefaults({ backend, hermesHome, rememberLog = () => undefined, skillDirs = DEFAULT_OPL_SKILL_DIRS } = {}) {
+function seedOplHermesDefaults({
+  backend,
+  hermesHome,
+  rememberLog = () => undefined,
+  skillDirs = DEFAULT_OPL_SKILL_DIRS,
+  defaultLanguage = defaultLanguageFromLocale(process.env.LANG || process.env.LC_ALL || process.env.LC_MESSAGES)
+} = {}) {
   if (!backend?.command) {
     return { skipped: true, reason: 'missing_backend_command' }
   }
@@ -98,7 +115,7 @@ function seedOplHermesDefaults({ backend, hermesHome, rememberLog = () => undefi
       HERMES_HOME: hermesHome,
       ...backend.env,
       OPL_HERMES_SKILL_DIRS_JSON: JSON.stringify(existingSkillDirs),
-      OPL_HERMES_DEFAULT_LANGUAGE: process.env.OPL_HERMES_DEFAULT_LANGUAGE || 'zh'
+      OPL_HERMES_DEFAULT_LANGUAGE: process.env.OPL_HERMES_DEFAULT_LANGUAGE || defaultLanguage
     },
     encoding: 'utf8',
     shell: false
@@ -124,6 +141,7 @@ function seedOplHermesDefaults({ backend, hermesHome, rememberLog = () => undefi
 
 module.exports = {
   DEFAULT_OPL_SKILL_DIRS,
+  defaultLanguageFromLocale,
   existingDirectories,
   seedOplHermesDefaults,
   seedScript

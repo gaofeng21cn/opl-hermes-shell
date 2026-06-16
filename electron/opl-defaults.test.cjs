@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const { existingDirectories, seedOplHermesDefaults } = require('./opl-defaults.cjs')
+const { defaultLanguageFromLocale, existingDirectories, seedOplHermesDefaults } = require('./opl-defaults.cjs')
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-defaults-'))
@@ -54,6 +54,15 @@ test('existingDirectories filters absent OPL skill directories', () => {
   }
 })
 
+test('defaultLanguageFromLocale maps supported system locales', () => {
+  assert.equal(defaultLanguageFromLocale('zh-CN'), 'zh')
+  assert.equal(defaultLanguageFromLocale('zh_Hans_CN.UTF-8'), 'zh')
+  assert.equal(defaultLanguageFromLocale('zh-TW'), 'zh-hant')
+  assert.equal(defaultLanguageFromLocale('ja-JP'), 'ja')
+  assert.equal(defaultLanguageFromLocale('en-US'), 'en')
+  assert.equal(defaultLanguageFromLocale('de-DE'), 'en')
+})
+
 test('seedOplHermesDefaults adds OPL runtime, language, and skill dirs without Hermes backend replacement', () => {
   const root = tmpDir()
   const home = path.join(root, 'home')
@@ -71,7 +80,8 @@ test('seedOplHermesDefaults adds OPL runtime, language, and skill dirs without H
       },
       hermesHome: home,
       rememberLog: line => logs.push(String(line)),
-      skillDirs: [skillDir, path.join(root, 'missing-skills')]
+      skillDirs: [skillDir, path.join(root, 'missing-skills')],
+      defaultLanguage: 'zh'
     })
 
     assert.equal(result.changed, true)

@@ -1445,7 +1445,7 @@ export const en: Translations = {
     chooseLater: "I'll configure model access later",
     recommended: 'Recommended',
     connected: 'Connected',
-    featuredPitch: 'Use the default OPL model access endpoint for Codex CLI',
+    featuredPitch: 'Use the default One Person Lab model access endpoint for Codex',
     openRouterPitch: 'One key, hundreds of models — a solid default',
     apiKeyOptions: {
       openrouter: {
@@ -1455,7 +1455,7 @@ export const en: Translations = {
       gflabtoken: {
         name: 'OPL Model Access',
         short: 'Default model access',
-        description: 'Configure the API key for the default OPL Codex CLI executor. This key may be provided by gflabtoken.'
+        description: 'Configure the API key for the default One Person Lab Codex adapter. This key may be provided by gflabtoken.'
       },
       openai: { short: 'GPT-class models', description: 'Direct access to OpenAI models.' },
       gemini: { short: 'Gemini models', description: 'Direct access to Google Gemini models.' },

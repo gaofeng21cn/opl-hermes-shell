@@ -47,6 +47,7 @@
     "preview": "node scripts/assert-root-install.cjs && vite preview --host 127.0.0.1 --port 4174",
     "package": "node scripts/package-opl-candidate-app.cjs",
     "pack:opl": "node scripts/package-opl-candidate-app.cjs",
+    "smoke:opl-first-run": "node scripts/smoke-opl-first-run.cjs",
     "validate:candidate": "node scripts/validate-hermes-codex-candidate.cjs"
   },
   "dependencies": {

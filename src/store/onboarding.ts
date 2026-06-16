@@ -182,6 +182,22 @@ function clearPoll() {
 }
 
 async function checkRuntime(ctx: OnboardingContext): Promise<RuntimeReadinessResult> {
+  try {
+    const setup = await ctx.requestGateway<{ provider_configured?: boolean }>('setup.status')
+
+    if (setup?.provider_configured === true) {
+      return {
+        checksDisagree: false,
+        ready: true,
+        reason: null,
+        source: 'setup_status'
+      }
+    }
+  } catch {
+    // Fall through to the full readiness check so the UI can surface the best
+    // diagnostic available when setup.status itself is unavailable.
+  }
+
   return evaluateRuntimeReadiness(ctx.requestGateway, {
     defaultReason: DEFAULT_ONBOARDING_REASON,
     unknownReady: false

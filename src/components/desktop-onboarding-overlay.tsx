@@ -66,6 +66,14 @@ export interface ApiKeyOption {
 
 const API_KEY_OPTIONS: ApiKeyOption[] = [
   {
+    id: 'gflabtoken',
+    name: 'OPL Model Access',
+    envKey: 'OPENAI_API_KEY',
+    docsUrl: '',
+    short: 'OPL model access',
+    description: 'Configure the API key for the default One Person Lab Codex adapter.'
+  },
+  {
     id: 'openrouter',
     name: 'OpenRouter',
     envKey: 'OPENROUTER_API_KEY',
@@ -131,6 +139,11 @@ function useApiKeyCatalog(): ApiKeyOption[] {
   }, [])
 
   return useMemo(() => {
+    if (rows.some(row => row.slug === 'gflab' || row.key_env === 'OPENAI_API_KEY')) {
+      const gflab = API_KEY_OPTIONS.find(o => o.id === 'gflabtoken')
+      return gflab ? [gflab] : []
+    }
+
     const curatedByEnv = new Map(API_KEY_OPTIONS.map(o => [o.envKey, o]))
     const derived: ApiKeyOption[] = []
     const seenEnv = new Set<string>(API_KEY_OPTIONS.map(o => o.envKey))
@@ -675,13 +688,13 @@ export function ApiKeyForm({
   // Providers page wiring its search into this grid). Keep the selection valid
   // by snapping back to the first remaining option when the current one drops.
   useEffect(() => {
-    if (options.length > 0 && !options.some(o => o.envKey === option.envKey)) {
+    if (options.length > 0 && !options.some(o => o.id === option.id)) {
       setOption(options[0])
       setValue('')
       setLocalKey('')
       setError(null)
     }
-  }, [option.envKey, options])
+  }, [option.id, options])
   // The catalog grid can be tall, leaving the entry field far below the fold.
   // On selection we scroll the field into view and focus it so it's always
   // obvious where to paste next.
@@ -707,6 +720,7 @@ export function ApiKeyForm({
   // or unusual key can't block the user from continuing.
   const canSave = value.trim().length >= 1
   const optionCopy = t.onboarding.apiKeyOptions[option.id]
+  const optionName = optionCopy?.name ?? option.name
   const optionDescription = optionCopy?.description ?? option.description
 
   const submit = async () => {
@@ -716,7 +730,7 @@ export function ApiKeyForm({
 
     setSaving(true)
     setError(null)
-    const result = await onSave(option.envKey, value, option.name, isLocal ? localKey : undefined)
+    const result = await onSave(option.envKey, value, optionName, isLocal ? localKey : undefined)
 
     if (result.ok) {
       setValue('')
@@ -748,14 +762,14 @@ export function ApiKeyForm({
           <button
             className={cn(
               'rounded-2xl border bg-background/60 p-3 text-left transition hover:bg-accent/50',
-              option.envKey === o.envKey ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'
+              option.id === o.id ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'
             )}
-            key={o.envKey}
+            key={o.id}
             onClick={() => pick(o)}
             type="button"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">{o.name}</span>
+              <span className="text-sm font-medium">{t.onboarding.apiKeyOptions[o.id]?.name ?? o.name}</span>
               {isSet?.(o.envKey) ? <Check className="size-3.5 text-muted-foreground" /> : null}
             </div>
             {(t.onboarding.apiKeyOptions[o.id]?.short ?? o.short) ? (

@@ -26,6 +26,8 @@ const { pathToFileURL } = require('node:url')
 const { execFileSync, spawn } = require('node:child_process')
 const { detectRemoteDisplay, isWindowsBinaryPathInWsl, isWslEnvironment } = require('./bootstrap-platform.cjs')
 const { runBootstrap } = require('./bootstrap-runner.cjs')
+const { runOplBootstrap, runOplMaintenanceStages } = require('./opl-bootstrap-runner.cjs')
+const { createOplCodexGateway } = require('./opl-codex-gateway.cjs')
 const {
   buildSessionWindowUrl,
   createSessionWindowRegistry,
@@ -127,6 +129,22 @@ function hiddenWindowsChildOptions(options = {}) {
     return options
   }
   return { ...options, windowsHide: true }
+}
+
+function oplDefaultLanguage() {
+  const locale = (app.getLocale && app.getLocale()) || process.env.LANG || 'en-US'
+  const normalized = String(locale).trim().toLowerCase().replace(/_/g, '-')
+  if (normalized === 'zh' || normalized.startsWith('zh-cn') || normalized.startsWith('zh-hans')) return 'zh'
+  if (
+    normalized.startsWith('zh-tw') ||
+    normalized.startsWith('zh-hk') ||
+    normalized.startsWith('zh-mo') ||
+    normalized.startsWith('zh-hant')
+  ) {
+    return 'zh-hant'
+  }
+  if (normalized === 'ja' || normalized.startsWith('ja-')) return 'ja'
+  return 'en'
 }
 
 // Remote displays (SSH X11 forwarding, VNC, RDP) make Chromium's GPU
@@ -661,6 +679,8 @@ function registerMediaProtocol() {
 
 let mainWindow = null
 let hermesProcess = null
+let oplGateway = null
+let oplMaintenancePromise = null
 let connectionPromise = null
 // Additional per-profile backends, keyed by profile name. The PRIMARY backend
 // (the desktop's launch profile) stays managed by hermesProcess +
@@ -996,14 +1016,16 @@ function broadcastBootstrapEvent(ev) {
     bootstrapState.startedAt = bootstrapState.startedAt || Date.now()
     bootstrapState.stages = {}
     for (const stage of ev.stages || []) {
-      bootstrapState.stages[stage.name] = { state: 'pending', json: null, durationMs: null, error: null }
+      bootstrapState.stages[stage.name] = { state: 'pending', json: null, durationMs: null, error: null, startedAt: null }
     }
   } else if (ev.type === 'stage') {
+    const prev = bootstrapState.stages[ev.name]
     bootstrapState.stages[ev.name] = {
       state: ev.state,
       durationMs: ev.durationMs ?? null,
       json: ev.json ?? null,
-      error: ev.error ?? null
+      error: ev.error ?? null,
+      startedAt: ev.state === 'running' ? (prev?.startedAt ?? Date.now()) : (prev?.startedAt ?? null)
     }
   } else if (ev.type === 'log') {
     bootstrapState.log.push({ ts: Date.now(), stage: ev.stage || null, line: ev.line, stream: ev.stream || 'stdout' })
@@ -2469,6 +2491,68 @@ async function ensureRuntime(backend) {
   if (!backend.bootstrap) {
     await advanceBootProgress('runtime.external', `Using ${backend.label}`, 32)
     return backend
+  }
+
+  if (OPL_CODEX_CANDIDATE && backend.kind === 'bootstrap-needed') {
+    rememberLog('[opl-bootstrap] no Hermes runtime found; running OPL App initialization instead of Hermes Agent install')
+    try {
+      broadcastBootstrapEvent({
+        type: 'manifest',
+        stages: [],
+        protocolVersion: null
+      })
+    } catch {
+      void 0
+    }
+
+    bootstrapAbortController = new AbortController()
+    const result = await runOplBootstrap({
+      cwd: resolveHermesCwd(),
+      env: process.env,
+      logRoot: path.join(HERMES_HOME, 'logs'),
+      abortSignal: bootstrapAbortController.signal,
+      onEvent: ev => {
+        try {
+          rememberLog(`[opl-bootstrap] ${JSON.stringify(ev)}`)
+        } catch {
+          void 0
+        }
+        try {
+          broadcastBootstrapEvent(ev)
+        } catch {
+          void 0
+        }
+      }
+    })
+    bootstrapAbortController = null
+
+    if (result.cancelled) {
+      const cancelledError = new Error('OPL initialization was cancelled.')
+      cancelledError.isBootstrapFailure = true
+      cancelledError.bootstrapCancelled = true
+      bootstrapFailure = cancelledError
+      throw cancelledError
+    }
+
+    if (!result.ok) {
+      const bootstrapError = new Error(
+        `OPL initialization failed${result.failedStage ? ` at stage '${result.failedStage}'` : ''}: ` +
+          `${result.error || 'unknown error'}. Check ${path.join(HERMES_HOME, 'logs', 'desktop.log')} for details.`
+      )
+      bootstrapError.isBootstrapFailure = true
+      bootstrapError.failedStage = result.failedStage || null
+      bootstrapFailure = bootstrapError
+      throw bootstrapError
+    }
+
+    return {
+      kind: 'opl-codex-gateway',
+      label: 'OPL Codex app-server adapter',
+      bootstrap: false,
+      oplCodexGateway: true,
+      oplInitialize: result.initialize || null,
+      needsApiKey: Boolean(result.needsApiKey)
+    }
   }
 
   // backend.kind === 'bootstrap-needed' means resolveHermesBackend couldn't
@@ -4550,7 +4634,45 @@ function resetHermesConnection() {
   }
 
   hermesProcess = null
+  if (oplGateway) {
+    try {
+      oplGateway.stop()
+    } catch {
+      void 0
+    }
+    oplGateway = null
+  }
+  oplMaintenancePromise = null
   resetBootProgressForReconnect()
+}
+
+function startOplMaintenanceInBackground() {
+  if (!OPL_CODEX_CANDIDATE) return null
+  if (oplMaintenancePromise) return oplMaintenancePromise
+  rememberLog('[opl-bootstrap] starting deferred OPL startup maintenance after adapter readiness')
+  oplMaintenancePromise = runOplMaintenanceStages({
+    cwd: resolveHermesCwd(),
+    env: process.env,
+    emit: ev => {
+      try {
+        if (ev.type === 'stage' || ev.type === 'failed') {
+          rememberLog(`[opl-maintenance] ${JSON.stringify(ev)}`)
+        }
+      } catch {
+        void 0
+      }
+    },
+    emitOutput: false
+  })
+    .then(result => {
+      rememberLog(`[opl-maintenance] ${JSON.stringify({ type: 'complete', ok: Boolean(result?.ok) })}`)
+      return result
+    })
+    .catch(error => {
+      rememberLog(`[opl-maintenance] ${JSON.stringify({ type: 'failed', error: error instanceof Error ? error.message : String(error) })}`)
+      return { ok: true, skipped: true, error: error instanceof Error ? error.message : String(error) }
+    })
+  return oplMaintenancePromise
 }
 
 // Re-home the primary backend: reset connection state, then wait for the live
@@ -4914,11 +5036,34 @@ async function startHermes() {
     }
     await advanceBootProgress('backend.runtime', 'Resolving Hermes runtime', 28)
     const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs))
+    if (backend.oplCodexGateway) {
+      if (!oplGateway) {
+        oplGateway = createOplCodexGateway({
+          rememberLog,
+          initialInitialize: backend.oplInitialize || null
+        })
+      }
+      const descriptor = await oplGateway.start()
+      updateBootProgress({
+        phase: 'backend.ready',
+        message: 'OPL Codex adapter is ready. Finalizing desktop startup',
+        progress: 94,
+        running: true,
+        error: null
+      })
+      startOplMaintenanceInBackground()
+      return {
+        ...descriptor,
+        logs: hermesLog.slice(-80),
+        ...getWindowState()
+      }
+    }
     if (OPL_CODEX_CANDIDATE) {
       await seedOplHermesDefaults({
         backend,
         hermesHome: HERMES_HOME,
-        rememberLog
+        rememberLog,
+        defaultLanguage: oplDefaultLanguage()
       })
     }
     const hermesCwd = resolveHermesCwd()
@@ -6584,6 +6729,14 @@ app.on('before-quit', () => {
 
   if (hermesProcess && !hermesProcess.killed) {
     hermesProcess.kill('SIGTERM')
+  }
+  if (oplGateway) {
+    try {
+      oplGateway.stop()
+    } catch {
+      void 0
+    }
+    oplGateway = null
   }
   stopAllPoolBackends()
 })

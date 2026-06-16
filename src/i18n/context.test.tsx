@@ -30,15 +30,68 @@ describe('I18nProvider', () => {
     vi.restoreAllMocks()
   })
 
-  it('defaults to English without a config client', () => {
-    render(
-      <I18nProvider configClient={null}>
-        <LanguageProbe />
-      </I18nProvider>
-    )
+  it('uses the browser locale before config has loaded', () => {
+    const originalLanguages = Object.getOwnPropertyDescriptor(window.navigator, 'languages')
+    const originalLanguage = Object.getOwnPropertyDescriptor(window.navigator, 'language')
 
-    expect(screen.getByTestId('locale').textContent).toBe('en')
-    expect(screen.getByTestId('label').textContent).toBe('Language')
+    try {
+      Object.defineProperty(window.navigator, 'languages', {
+        configurable: true,
+        value: ['zh-CN', 'en-US']
+      })
+      Object.defineProperty(window.navigator, 'language', {
+        configurable: true,
+        value: 'zh-CN'
+      })
+
+      render(
+        <I18nProvider configClient={null}>
+          <LanguageProbe />
+        </I18nProvider>
+      )
+
+      expect(screen.getByTestId('locale').textContent).toBe('zh')
+      expect(screen.getByTestId('label').textContent).toBe('语言')
+    } finally {
+      if (originalLanguages) {
+        Object.defineProperty(window.navigator, 'languages', originalLanguages)
+      }
+      if (originalLanguage) {
+        Object.defineProperty(window.navigator, 'language', originalLanguage)
+      }
+    }
+  })
+
+  it('falls back to English when the browser locale is unsupported', () => {
+    const originalLanguages = Object.getOwnPropertyDescriptor(window.navigator, 'languages')
+    const originalLanguage = Object.getOwnPropertyDescriptor(window.navigator, 'language')
+
+    try {
+      Object.defineProperty(window.navigator, 'languages', {
+        configurable: true,
+        value: ['de-DE']
+      })
+      Object.defineProperty(window.navigator, 'language', {
+        configurable: true,
+        value: 'de-DE'
+      })
+
+      render(
+        <I18nProvider configClient={null}>
+          <LanguageProbe />
+        </I18nProvider>
+      )
+
+      expect(screen.getByTestId('locale').textContent).toBe('en')
+      expect(screen.getByTestId('label').textContent).toBe('Language')
+    } finally {
+      if (originalLanguages) {
+        Object.defineProperty(window.navigator, 'languages', originalLanguages)
+      }
+      if (originalLanguage) {
+        Object.defineProperty(window.navigator, 'language', originalLanguage)
+      }
+    }
   })
 
   it('normalizes an initial locale alias and switches translations', async () => {
@@ -76,7 +129,7 @@ describe('I18nProvider', () => {
     expect(configClient.saveConfig).not.toHaveBeenCalled()
   })
 
-  it('keeps English usable when config loading fails', async () => {
+  it('keeps the visible locale when config loading fails', async () => {
     const configClient: I18nConfigClient = {
       getConfig: vi.fn().mockRejectedValue(new Error('config unavailable')),
       saveConfig: vi.fn()
@@ -90,8 +143,8 @@ describe('I18nProvider', () => {
 
     await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
 
-    expect(screen.getByTestId('locale').textContent).toBe('en')
-    expect(screen.getByTestId('label').textContent).toBe('Language')
+    expect(screen.getByTestId('locale').textContent).toBe('zh')
+    expect(screen.getByTestId('label').textContent).toBe('语言')
     expect(configClient.saveConfig).not.toHaveBeenCalled()
   })
 
@@ -133,7 +186,7 @@ describe('I18nProvider', () => {
     expect(configClient.saveConfig).not.toHaveBeenCalled()
   })
 
-  it('does not overwrite unsupported configured languages', async () => {
+  it('does not overwrite the visible locale with unsupported configured languages', async () => {
     const configClient: I18nConfigClient = {
       getConfig: vi.fn().mockResolvedValue({ display: { language: 'de' } }),
       saveConfig: vi.fn()
@@ -147,8 +200,8 @@ describe('I18nProvider', () => {
 
     await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
 
-    expect(screen.getByTestId('locale').textContent).toBe('en')
-    expect(screen.getByTestId('label').textContent).toBe('Language')
+    expect(screen.getByTestId('locale').textContent).toBe('zh')
+    expect(screen.getByTestId('label').textContent).toBe('语言')
     expect(configClient.saveConfig).not.toHaveBeenCalled()
   })
 
