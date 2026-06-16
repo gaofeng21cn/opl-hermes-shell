@@ -43,14 +43,14 @@ export const zhHant = defineLocale({
   },
 
   boot: {
-    ready: 'Hermes Desktop 已就緒',
+    ready: 'OPL 桌面版已就緒',
     desktopBootFailedWithMessage: message => `桌面啟動失敗：${message}`,
     steps: {
       connectingGateway: '正在連線桌面閘道',
       loadingSettings: '正在載入 Hermes 設定',
       loadingSessions: '正在載入最近工作階段',
       startingDesktopConnection: '正在啟動桌面連線',
-      startingHermesDesktop: '正在啟動 Hermes Desktop…'
+      startingHermesDesktop: '正在啟動 OPL 桌面版…'
     },
     errors: {
       backgroundExited: 'Hermes 背景程序已結束。',
@@ -1479,7 +1479,20 @@ export const zhHant = defineLocale({
       skipped: '已略過',
       failed: '失敗'
     },
-    oneTimeTitle: 'Hermes 需要一次性安裝',
+    stages: {
+      'opl-cli-check': '檢查 One Person Lab 命令列',
+      'codex-cli-check': '檢查 Codex CLI',
+      'opl-initialize': '讀取 One Person Lab 狀態',
+      'opl-core-setup': '準備 One Person Lab 核心元件',
+      'opl-post-setup-check': '複核 One Person Lab 初始化結果',
+      'opl-model-access': '檢查模型存取',
+      'gflabtoken-access': '設定模型存取',
+      'opl-codex-adapter': '準備 Codex 桌面轉接器',
+      'opl-maintenance-schedule': '安排背景維護',
+      'opl-startup-maintenance': '背景維護 One Person Lab 模組',
+      'opl-reconcile-modules': '同步 One Person Lab 模組狀態'
+    },
+    oneTimeTitle: 'One Person Lab 需要一次性初始化',
     unsupportedDesc: platform =>
       `${platform} 暫不支援自動首次啟動安裝。請開啟終端機並執行下面的指令，然後重新啟動此應用程式。之後啟動會略過此步驟。`,
     installCommand: '安裝指令',
@@ -1487,22 +1500,22 @@ export const zhHant = defineLocale({
     viewDocs: '檢視安裝文件',
     installTo: '將安裝至',
     retryAfterRun: '我已執行 -- 重試',
-    failedTitle: '安裝失敗',
-    settingUpTitle: '正在設定 Hermes Agent',
+    failedTitle: '初始化失敗',
+    settingUpTitle: '正在初始化 One Person Lab',
     finishingTitle: '正在收尾',
     failedDesc:
-      '某個安裝步驟失敗。在 Windows 上，如果另一個 Hermes CLI 或桌面執行個體正在執行，可能會出現這種情況。請停止正在執行的 Hermes 執行個體後重試。可查看下方的詳細資訊或 desktop 記錄中的完整記錄。',
-    activeDesc: '這是一次性設定。Hermes 安裝程式正在下載相依套件並設定您的電腦。之後啟動會略過此步驟。',
+      '某個初始化步驟失敗。請查看下方的詳細資訊或 desktop 記錄中的完整記錄；這裡不會自動安裝 Hermes Agent。',
+    activeDesc: '這是一次性初始化。One Person Lab 正在檢查本機 OPL、Codex CLI、必要模組和模型存取設定。',
     progress: (completed, total) => `${completed}/${total} 個步驟已完成`,
     currentStage: stage => ` -- 目前：${stage}`,
-    fetchingManifest: '正在取得安裝程式 manifest...',
+    fetchingManifest: '正在讀取初始化步驟...',
     error: '錯誤',
-    hideOutput: '隱藏安裝程式輸出',
-    showOutput: '顯示安裝程式輸出',
+    hideOutput: '隱藏初始化輸出',
+    showOutput: '顯示初始化輸出',
     lines: count => `${count} 行`,
     noOutput: '暫無輸出。',
     cancelling: '取消中...',
-    cancelInstall: '取消安裝',
+    cancelInstall: '取消初始化',
     transcriptSaved: '完整記錄已儲存至',
     copiedOutput: '已複製！',
     copyOutput: '複製輸出',

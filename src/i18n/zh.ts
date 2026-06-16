@@ -43,14 +43,14 @@ export const zh: Translations = {
   },
 
   boot: {
-    ready: 'Hermes 桌面版已就绪',
+    ready: 'OPL 桌面版已就绪',
     desktopBootFailedWithMessage: message => `桌面启动失败：${message}`,
     steps: {
       connectingGateway: '正在连接桌面网关',
       loadingSettings: '正在加载 Hermes 设置',
       loadingSessions: '正在加载最近会话',
       startingDesktopConnection: '正在启动桌面连接',
-      startingHermesDesktop: '正在启动 Hermes 桌面版…'
+      startingHermesDesktop: '正在启动 OPL 桌面版…'
     },
     errors: {
       backgroundExited: 'Hermes 后台进程已退出。',
@@ -1570,12 +1570,25 @@ export const zh: Translations = {
   install: {
     stageStates: {
       pending: '等待中',
-      running: '安装中',
+      running: '处理中',
       succeeded: '完成',
       skipped: '已跳过',
       failed: '失败'
     },
-    oneTimeTitle: 'Hermes 需要一次性安装',
+    stages: {
+      'opl-cli-check': '检查 One Person Lab 命令行',
+      'codex-cli-check': '检查 Codex CLI',
+      'opl-initialize': '读取 One Person Lab 状态',
+      'opl-core-setup': '准备 One Person Lab 核心组件',
+      'opl-post-setup-check': '复核 One Person Lab 初始化结果',
+      'opl-model-access': '检查模型访问',
+      'gflabtoken-access': '配置模型访问',
+      'opl-codex-adapter': '准备 Codex 桌面适配器',
+      'opl-maintenance-schedule': '安排后台维护',
+      'opl-startup-maintenance': '后台维护 One Person Lab 模块',
+      'opl-reconcile-modules': '同步 One Person Lab 模块状态'
+    },
+    oneTimeTitle: 'One Person Lab 需要一次性初始化',
     unsupportedDesc: platform =>
       `${platform} 暂不支持自动首次启动安装。请打开终端并运行下面的命令，然后重新启动此应用。之后启动会跳过此步骤。`,
     installCommand: '安装命令',
@@ -1583,22 +1596,22 @@ export const zh: Translations = {
     viewDocs: '查看安装文档',
     installTo: '将安装到',
     retryAfterRun: '我已运行 -- 重试',
-    failedTitle: '安装失败',
-    settingUpTitle: '正在设置 Hermes Agent',
+    failedTitle: '初始化失败',
+    settingUpTitle: '正在初始化 One Person Lab',
     finishingTitle: '正在收尾',
     failedDesc:
-      '某个安装步骤失败。在 Windows 上，如果另一个 Hermes CLI 或桌面实例正在运行，可能会出现这种情况。请停止正在运行的 Hermes 实例后重试。可查看下面的详情或 desktop 日志中的完整记录。',
-    activeDesc: '这是一次性设置。Hermes 安装器正在下载依赖并配置你的机器。之后启动会跳过此步骤。',
+      '某个初始化步骤失败。请查看下面的详情或 desktop 日志中的完整记录；这里不会自动安装 Hermes Agent。',
+    activeDesc: '这是一次性初始化。One Person Lab 正在检查本机 OPL、Codex CLI、必要模块和模型访问配置。',
     progress: (completed, total) => `${completed}/${total} 个步骤已完成`,
     currentStage: stage => ` -- 当前：${stage}`,
-    fetchingManifest: '正在获取安装器 manifest...',
+    fetchingManifest: '正在读取初始化步骤...',
     error: '错误',
-    hideOutput: '隐藏安装器输出',
-    showOutput: '显示安装器输出',
+    hideOutput: '隐藏初始化输出',
+    showOutput: '显示初始化输出',
     lines: count => `${count} 行`,
     noOutput: '暂无输出。',
     cancelling: '取消中...',
-    cancelInstall: '取消安装',
+    cancelInstall: '取消初始化',
     transcriptSaved: '完整记录已保存到',
     copiedOutput: '已复制！',
     copyOutput: '复制输出',
@@ -1606,21 +1619,26 @@ export const zh: Translations = {
   },
 
   onboarding: {
-    headerTitle: '开始设置 Hermes Agent',
-    headerDesc: '连接模型提供方即可开始对话。大多数选项只需一次点击。',
-    preparingInstall: 'Hermes 正在完成安装。首次运行通常不到一分钟。',
-    starting: '正在启动 Hermes…',
-    lookingUpProviders: '正在查找提供方...',
+    headerTitle: '配置 OPL 模型访问',
+    headerDesc: '当前未检测到可用的 OPL 模型访问配置。请输入 API 密钥；如果本机 Codex 已完成配置，应用会自动继续。',
+    preparingInstall: 'One Person Lab 正在完成本机初始化。首次运行可能需要稍等。',
+    starting: '正在启动 One Person Lab…',
+    lookingUpProviders: '正在读取模型访问配置...',
     collapse: '收起',
-    otherProviders: '其他提供方',
+    otherProviders: '模型访问配置',
     haveApiKey: '我有 API 密钥',
-    chooseLater: '稍后再选择提供方',
+    chooseLater: '稍后再配置模型访问',
     recommended: '推荐',
     connected: '已连接',
-    featuredPitch: '一个订阅，300+ 前沿模型 — 运行 Hermes 的推荐方式',
+    featuredPitch: '使用 OPL 默认模型访问入口运行 Codex CLI',
     openRouterPitch: '一个密钥，数百个模型 — 稳妥的默认选择',
     apiKeyOptions: {
       openrouter: { short: '一个密钥，多个模型', description: '用一个密钥访问数百个模型。适合新安装的默认选择。' },
+      gflabtoken: {
+        name: 'OPL 模型访问',
+        short: '默认模型访问',
+        description: '为 OPL 默认 Codex CLI 执行器配置 API 密钥。该密钥可由 gflabtoken 提供。'
+      },
       openai: { short: 'GPT 级模型', description: '直接访问 OpenAI 模型。' },
       gemini: { short: 'Gemini 模型', description: '直接访问 Google Gemini 模型。' },
       xai: { short: 'Grok 模型', description: '直接访问 xAI Grok 模型。' },

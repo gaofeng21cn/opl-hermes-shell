@@ -43,14 +43,14 @@ export const ja = defineLocale({
   },
 
   boot: {
-    ready: 'Hermes Desktop の準備ができました',
+    ready: 'OPL Desktop の準備ができました',
     desktopBootFailedWithMessage: message => `デスクトップの起動に失敗しました: ${message}`,
     steps: {
       connectingGateway: 'ライブデスクトップゲートウェイに接続中',
       loadingSettings: 'Hermes の設定を読み込み中',
       loadingSessions: '最近のセッションを読み込み中',
       startingDesktopConnection: 'デスクトップ接続を開始中',
-      startingHermesDesktop: 'Hermes Desktop を起動中…'
+      startingHermesDesktop: 'OPL Desktop を起動中…'
     },
     errors: {
       backgroundExited: 'Hermes バックグラウンドプロセスが終了しました。',
@@ -1528,7 +1528,20 @@ export const ja = defineLocale({
       skipped: 'スキップ',
       failed: '失敗'
     },
-    oneTimeTitle: 'Hermes には一度限りのインストールが必要です',
+    stages: {
+      'opl-cli-check': 'One Person Lab CLI を確認',
+      'codex-cli-check': 'Codex CLI を確認',
+      'opl-initialize': 'One Person Lab の状態を読み取り',
+      'opl-core-setup': 'One Person Lab コアコンポーネントを準備',
+      'opl-post-setup-check': 'One Person Lab 初期化結果を確認',
+      'opl-model-access': 'モデルアクセスを確認',
+      'gflabtoken-access': 'モデルアクセスを設定',
+      'opl-codex-adapter': 'Codex デスクトップアダプターを準備',
+      'opl-maintenance-schedule': 'バックグラウンド保守を予約',
+      'opl-startup-maintenance': 'One Person Lab モジュールをバックグラウンドで保守',
+      'opl-reconcile-modules': 'One Person Lab モジュール状態を同期'
+    },
+    oneTimeTitle: 'One Person Lab には一度限りの初期化が必要です',
     unsupportedDesc: platform =>
       `${platform} では自動の初回インストールはまだ利用できません。ターミナルを開いて以下のコマンドを実行し、このアプリを再起動してください。以降の起動ではこの手順はスキップされます。`,
     installCommand: 'インストールコマンド',
@@ -1536,23 +1549,23 @@ export const ja = defineLocale({
     viewDocs: 'インストールドキュメントを見る',
     installTo: 'インストール先',
     retryAfterRun: '実行しました — 再試行',
-    failedTitle: 'インストールに失敗しました',
-    settingUpTitle: 'Hermes Agent を設定中',
+    failedTitle: '初期化に失敗しました',
+    settingUpTitle: 'One Person Lab を初期化中',
     finishingTitle: '仕上げ中',
     failedDesc:
-      'インストール手順のいずれかが失敗しました。Windows では、別の Hermes CLI またはデスクトップインスタンスが実行中の場合に発生することがあります。実行中の Hermes インスタンスをすべて停止してから再試行してください。詳細は以下またはデスクトップログで確認できます。',
+      '初期化手順のいずれかが失敗しました。詳細は以下またはデスクトップログで確認してください。この経路では Hermes Agent は自動インストールされません。',
     activeDesc:
-      'これは一回限りのセットアップです。Hermes インストーラーが依存関係をダウンロードしてマシンを設定しています。以降の起動ではこの手順はスキップされます。',
+      'これは一回限りの初期化です。One Person Lab がローカルの OPL、Codex CLI、必要なモジュール、モデルアクセス設定を確認しています。',
     progress: (completed, total) => `${total} ステップ中 ${completed} 完了`,
     currentStage: stage => ` — 現在: ${stage}`,
-    fetchingManifest: 'インストーラーマニフェストを取得中...',
+    fetchingManifest: '初期化手順を読み込み中...',
     error: 'エラー',
-    hideOutput: 'インストーラーの出力を非表示',
-    showOutput: 'インストーラーの出力を表示',
+    hideOutput: '初期化出力を非表示',
+    showOutput: '初期化出力を表示',
     lines: count => `${count} 行`,
     noOutput: 'まだ出力がありません。',
     cancelling: 'キャンセル中...',
-    cancelInstall: 'インストールをキャンセル',
+    cancelInstall: '初期化をキャンセル',
     transcriptSaved: 'フルトランスクリプトを保存しました:',
     copiedOutput: 'コピーしました！',
     copyOutput: '出力をコピー',

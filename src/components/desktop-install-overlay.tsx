@@ -13,6 +13,7 @@ import type {
 import { useI18n } from '@/i18n'
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
+import type { Translations } from '@/i18n/types'
 
 /**
  * DesktopInstallOverlay
@@ -53,15 +54,18 @@ interface StageRowProps {
 }
 
 function formatStageName(name: string): string {
-  // 'system-packages' -> 'System packages'; 'uv' stays 'uv'
   if (name.length <= 3) {
-    return name
+    return name.toUpperCase()
   }
 
   return name
     .split('-')
     .map((word, i) => (i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word))
     .join(' ')
+}
+
+function stageTitle(copy: Translations['install'], descriptor: DesktopBootstrapStageDescriptor): string {
+  return copy.stages[descriptor.name] || descriptor.title || formatStageName(descriptor.name)
 }
 
 function formatDuration(ms: number | null | undefined): string {
@@ -141,7 +145,7 @@ function StageRow({ descriptor, result, isCurrent, now }: StageRowProps) {
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className={cn('truncate text-sm font-medium', state === 'pending' && 'text-muted-foreground')}>
-            {formatStageName(descriptor.name)}
+            {stageTitle(copy, descriptor)}
           </span>
           <span className="flex-shrink-0 text-xs tabular-nums text-muted-foreground">
             {state === 'running'
@@ -399,7 +403,8 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
   }
 
   const stages = state.manifest?.stages || []
-  const currentStage = stages.find(s => state.stages[s.name]?.state === 'running')?.name
+  const currentStageDescriptor = stages.find(s => state.stages[s.name]?.state === 'running') || null
+  const currentStage = currentStageDescriptor?.name || null
 
   const completedCount = stages.filter(
     s => state.stages[s.name]?.state === 'succeeded' || state.stages[s.name]?.state === 'skipped'
@@ -431,7 +436,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
               <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                 <span>
                   {copy.progress(completedCount, totalCount)}
-                  {currentStage && copy.currentStage(formatStageName(currentStage))}
+                  {currentStageDescriptor && copy.currentStage(stageTitle(copy, currentStageDescriptor))}
                   {currentElapsed && ` (${currentElapsed})`}
                 </span>
                 <span className="tabular-nums">{progressPct}%</span>

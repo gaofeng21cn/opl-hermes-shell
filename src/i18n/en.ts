@@ -43,14 +43,14 @@ export const en: Translations = {
   },
 
   boot: {
-    ready: 'Hermes Desktop is ready',
+    ready: 'OPL Desktop is ready',
     desktopBootFailedWithMessage: message => `Desktop boot failed: ${message}`,
     steps: {
       connectingGateway: 'Connecting live desktop gateway',
       loadingSettings: 'Loading Hermes settings',
       loadingSessions: 'Loading recent sessions',
       startingDesktopConnection: 'Starting desktop connection',
-      startingHermesDesktop: 'Starting Hermes Desktop…'
+      startingHermesDesktop: 'Starting OPL Desktop…'
     },
     errors: {
       backgroundExited: 'Hermes background process exited.',
@@ -1383,12 +1383,25 @@ export const en: Translations = {
   install: {
     stageStates: {
       pending: 'Pending',
-      running: 'Installing',
+      running: 'Running',
       succeeded: 'Done',
       skipped: 'Skipped',
       failed: 'Failed'
     },
-    oneTimeTitle: 'Hermes needs a one-time install',
+    stages: {
+      'opl-cli-check': 'Check One Person Lab CLI',
+      'codex-cli-check': 'Check Codex CLI',
+      'opl-initialize': 'Read One Person Lab status',
+      'opl-core-setup': 'Prepare One Person Lab core components',
+      'opl-post-setup-check': 'Verify One Person Lab setup',
+      'opl-model-access': 'Check model access',
+      'gflabtoken-access': 'Configure model access',
+      'opl-codex-adapter': 'Prepare Codex desktop adapter',
+      'opl-maintenance-schedule': 'Schedule background maintenance',
+      'opl-startup-maintenance': 'Refresh One Person Lab modules in background',
+      'opl-reconcile-modules': 'Reconcile One Person Lab module state'
+    },
+    oneTimeTitle: 'One Person Lab needs one-time initialization',
     unsupportedDesc: platform =>
       `Automated first-launch install isn’t available on ${platform} yet. Open Terminal and run the command below, then relaunch this app. Subsequent launches will skip this step.`,
     installCommand: 'Install command',
@@ -1396,23 +1409,23 @@ export const en: Translations = {
     viewDocs: 'View install docs',
     installTo: 'Will install to',
     retryAfterRun: 'I’ve run it -- retry',
-    failedTitle: 'Installation failed',
-    settingUpTitle: 'Setting up Hermes Agent',
+    failedTitle: 'Initialization failed',
+    settingUpTitle: 'Initializing One Person Lab',
     finishingTitle: 'Finishing up',
     failedDesc:
-      'One of the install steps failed. On Windows, this can happen if another Hermes CLI or desktop instance is running. Stop any running Hermes instances, then retry. Check the details below or the desktop log for the full transcript.',
+      'One of the initialization steps failed. Check the details below or the desktop log for the full transcript. This path does not install Hermes Agent.',
     activeDesc:
-      'This is a one-time setup. The Hermes installer is downloading dependencies and configuring your machine. Subsequent launches will skip this step.',
+      'This is a one-time initialization. One Person Lab is checking local OPL, Codex CLI, required modules, and model access.',
     progress: (completed, total) => `${completed} of ${total} steps complete`,
     currentStage: stage => ` -- now: ${stage}`,
-    fetchingManifest: 'Fetching installer manifest...',
+    fetchingManifest: 'Reading initialization steps...',
     error: 'Error',
-    hideOutput: 'Hide installer output',
-    showOutput: 'Show installer output',
+    hideOutput: 'Hide initialization output',
+    showOutput: 'Show initialization output',
     lines: count => `${count} line${count === 1 ? '' : 's'}`,
     noOutput: 'No output yet.',
     cancelling: 'Cancelling...',
-    cancelInstall: 'Cancel install',
+    cancelInstall: 'Cancel initialization',
     transcriptSaved: 'Full transcript saved to',
     copiedOutput: 'Copied!',
     copyOutput: 'Copy output',
@@ -1420,23 +1433,29 @@ export const en: Translations = {
   },
 
   onboarding: {
-    headerTitle: "Let's get you setup with Hermes Agent",
-    headerDesc: 'Connect a model provider to start chatting. Most options take one click.',
-    preparingInstall: 'Hermes is finishing install. This usually takes under a minute on first run.',
-    starting: 'Starting Hermes…',
-    lookingUpProviders: 'Looking up providers...',
+    headerTitle: 'Configure OPL model access',
+    headerDesc:
+      'No usable OPL model access configuration was detected. Enter an API key, or let the app continue automatically if local Codex is already configured.',
+    preparingInstall: 'One Person Lab is finishing local initialization. First run can take a moment.',
+    starting: 'Starting One Person Lab...',
+    lookingUpProviders: 'Reading model access configuration...',
     collapse: 'Collapse',
-    otherProviders: 'Other providers',
+    otherProviders: 'Model access configuration',
     haveApiKey: 'I have an API key',
-    chooseLater: "I'll choose a provider later",
+    chooseLater: "I'll configure model access later",
     recommended: 'Recommended',
     connected: 'Connected',
-    featuredPitch: 'One subscription, 300+ frontier models — the recommended way to run Hermes',
+    featuredPitch: 'Use the default OPL model access endpoint for Codex CLI',
     openRouterPitch: 'One key, hundreds of models — a solid default',
     apiKeyOptions: {
       openrouter: {
         short: 'one key, many models',
         description: 'Hosts hundreds of models behind a single key. Good default for new installs.'
+      },
+      gflabtoken: {
+        name: 'OPL Model Access',
+        short: 'Default model access',
+        description: 'Configure the API key for the default OPL Codex CLI executor. This key may be provided by gflabtoken.'
       },
       openai: { short: 'GPT-class models', description: 'Direct access to OpenAI models.' },
       gemini: { short: 'Gemini models', description: 'Direct access to Google Gemini models.' },

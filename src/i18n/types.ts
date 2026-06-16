@@ -1053,6 +1053,7 @@ export interface Translations {
 
   install: {
     stageStates: Record<string, string>
+    stages: Record<string, string>
     oneTimeTitle: string
     unsupportedDesc: (platform: string) => string
     installCommand: string
@@ -1095,7 +1096,7 @@ export interface Translations {
     connected: string
     featuredPitch: string
     openRouterPitch: string
-    apiKeyOptions: Record<string, { short: string; description: string }>
+    apiKeyOptions: Record<string, { name?: string; short: string; description: string }>
     backToSignIn: string
     getKey: string
     replaceCurrent: string
