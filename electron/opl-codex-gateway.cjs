@@ -6,6 +6,77 @@ const { spawn } = require('node:child_process')
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 
+const BRIDGE_REST_ROUTES = [
+  { method: 'GET', path: '/api/status' },
+  { method: 'GET', path: '/api/logs' },
+  { method: 'POST', path: '/api/providers/validate' },
+  { method: 'GET', path: '/api/model/options' },
+  { method: 'GET', path: '/api/model/info' },
+  { method: 'GET', path: '/api/model/recommended-default' }
+]
+
+const BRIDGE_RPC_METHODS = [
+  'session.create',
+  'session.resume',
+  'prompt.submit',
+  'session.interrupt',
+  'session.usage',
+  'session.title',
+  'session.cwd.set',
+  'setup.status',
+  'setup.runtime_check',
+  'model.options',
+  'file.attach',
+  'image.attach',
+  'image.attach_bytes'
+]
+
+const BRIDGE_REST_ROUTE_KEYS = new Set(BRIDGE_REST_ROUTES.map(route => routeKey(route.method, route.path)))
+const BRIDGE_RPC_METHOD_SET = new Set(BRIDGE_RPC_METHODS)
+
+function normalizeMethod(method) {
+  return String(method || 'GET').toUpperCase()
+}
+
+function routeKey(method, pathname) {
+  return `${normalizeMethod(method)} ${pathname}`
+}
+
+function isOplCodexBridgeRestRoute(method, pathname) {
+  return BRIDGE_REST_ROUTE_KEYS.has(routeKey(method, pathname))
+}
+
+function isOplCodexBridgeRpcMethod(method) {
+  return BRIDGE_RPC_METHOD_SET.has(String(method || ''))
+}
+
+function describeOplCodexGatewayScope() {
+  return {
+    mode: 'executor_agent_route_bridge',
+    replacesHermesBackend: false,
+    restRoutes: BRIDGE_REST_ROUTES.map(route => ({ ...route })),
+    rpcMethods: [...BRIDGE_RPC_METHODS],
+    upstreamHermesBackendOwns: [
+      'config',
+      'env',
+      'oauth',
+      'profiles',
+      'persisted sessions',
+      'session search',
+      'cron',
+      'skills',
+      'toolsets',
+      'messaging',
+      'analytics',
+      'Hermes update',
+      'audio',
+      'process catalog',
+      'command catalog',
+      'path completion'
+    ]
+  }
+}
+
 function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
   const token = crypto.randomBytes(24).toString('base64url')
   const sessions = new Map()
@@ -23,18 +94,6 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
 
   function defaultCwd() {
     return process.env.OPL_HERMES_DEFAULT_CWD || process.env.PWD || process.env.HOME || process.cwd()
-  }
-
-  function defaultProfile() {
-    return {
-      name: 'default',
-      path: defaultCwd(),
-      is_default: true,
-      has_env: true,
-      provider: 'codex',
-      model: 'auto',
-      skill_count: 0
-    }
   }
 
   function modelOptions() {
@@ -58,37 +117,6 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
     }
   }
 
-  function emptyAnalytics(days) {
-    return {
-      period_days: days,
-      daily: [],
-      by_model: [],
-      skills: {
-        summary: {
-          distinct_skills_used: 0,
-          total_skill_actions: 0,
-          total_skill_edits: 0,
-          total_skill_loads: 0
-        },
-        top_skills: []
-      },
-      totals: {
-        total_actual_cost: 0,
-        total_api_calls: 0,
-        total_cache_read: 0,
-        total_estimated_cost: 0,
-        total_input: 0,
-        total_output: 0,
-        total_reasoning: 0,
-        total_sessions: sessions.size
-      }
-    }
-  }
-
-  function actionResponse(name) {
-    return { ok: true, name, pid: process.pid }
-  }
-
   function runtimeInfo(session) {
     return {
       cwd: session.cwd,
@@ -101,30 +129,6 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
       version: 'opl-hermes-codex-candidate',
       desktop_contract: 2,
       usage: session.usage
-    }
-  }
-
-  function sessionRow(session) {
-    return {
-      id: session.storedId,
-      _lineage_root_id: session.storedId,
-      title: session.title,
-      preview: session.preview,
-      started_at: session.startedAt,
-      last_active: session.lastActive,
-      ended_at: session.running ? null : session.lastActive,
-      archived: false,
-      cwd: session.cwd,
-      input_tokens: session.usage.input,
-      output_tokens: session.usage.output,
-      is_active: session.running,
-      message_count: session.messages.length,
-      model: 'auto',
-      output_tokens: session.usage.output,
-      source: 'opl-codex',
-      tool_call_count: 0,
-      profile: 'default',
-      is_default_profile: true
     }
   }
 
@@ -165,29 +169,28 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
     response.end(JSON.stringify(payload))
   }
 
-  function readBody(request) {
-    return new Promise(resolve => {
-      let body = ''
-      request.on('data', chunk => {
-        body += chunk
-      })
-      request.on('end', () => {
-        if (!body) {
-          resolve({})
-          return
-        }
-        try {
-          resolve(JSON.parse(body))
-        } catch {
-          resolve({})
-        }
-      })
-    })
+  function unsupportedPayload(surface, name) {
+    return {
+      ok: false,
+      error: 'opl_codex_bridge_not_full_backend',
+      surface,
+      name,
+      route_owner: 'official_hermes_backend',
+      bridge_mode: 'executor_agent_route_bridge',
+      message: 'OPL Codex/MAS adapter only owns executor/agent bridge routes; official Hermes backend owns this route.'
+    }
+  }
+
+  function unsupportedRest(response, request, pathname) {
+    json(response, 501, unsupportedPayload('rest', `${normalizeMethod(request.method)} ${pathname}`))
   }
 
   function routeApi(request, response) {
-    const url = new URL(request.url || '/', `http://${request.headers.host || '127.0.0.1'}`)
-    const pathname = url.pathname
+    const { pathname } = new URL(request.url || '/', `http://${request.headers.host || '127.0.0.1'}`)
+    if (!isOplCodexBridgeRestRoute(request.method, pathname)) {
+      unsupportedRest(response, request, pathname)
+      return
+    }
     if (pathname === '/api/status') {
       json(response, 200, {
         ok: true,
@@ -215,20 +218,6 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
       json(response, 200, { file: 'desktop.log', lines: ['OPL Hermes Codex adapter is running.'] })
       return
     }
-    if (pathname === '/api/env') {
-      if (request.method === 'PUT' || request.method === 'DELETE') {
-        json(response, 200, { ok: true })
-        return
-      }
-      json(response, 200, {})
-      return
-    }
-    if (pathname === '/api/env/reveal') {
-      void readBody(request).then(body => {
-        json(response, 200, { key: String(body.key || ''), value: '' })
-      })
-      return
-    }
     if (pathname === '/api/providers/validate') {
       json(response, 200, {
         ok: true,
@@ -236,37 +225,6 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
         message: 'Codex CLI is used as the fixed OPL executor.',
         models: ['auto']
       })
-      return
-    }
-    if (pathname === '/api/providers/oauth') {
-      json(response, 200, { providers: [] })
-      return
-    }
-    if (pathname.startsWith('/api/providers/oauth/')) {
-      if (pathname.includes('/poll/')) {
-        const sessionId = pathname.split('/').pop() || ''
-        json(response, 200, { session_id: sessionId, status: 'pending', error_message: null, expires_at: null })
-        return
-      }
-      json(response, 200, { ok: true, provider: decodeURIComponent(pathname.split('/')[4] || 'codex') })
-      return
-    }
-    if (pathname === '/api/config' || pathname === '/api/config/defaults') {
-      if (request.method === 'PUT') {
-        json(response, 200, { ok: true })
-        return
-      }
-      json(response, 200, {
-        agent: { reasoning_effort: 'auto', service_tier: '' },
-        display: { language: 'zh', skin: 'opl' },
-        terminal: { cwd: defaultCwd() },
-        stt: { enabled: false },
-        voice: { max_recording_seconds: 60 }
-      })
-      return
-    }
-    if (pathname === '/api/config/schema') {
-      json(response, 200, { fields: {}, category_order: [] })
       return
     }
     if (pathname === '/api/model/options') {
@@ -288,234 +246,7 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
       json(response, 200, { provider: 'codex', model: 'auto', free_tier: null })
       return
     }
-    if (pathname === '/api/model/set') {
-      void readBody(request).then(body => {
-        json(response, 200, {
-          ok: true,
-          provider: String(body.provider || 'codex'),
-          model: String(body.model || 'auto'),
-          scope: String(body.scope || 'main'),
-          tasks: [],
-          stale_aux: [],
-          gateway_tools: []
-        })
-      })
-      return
-    }
-    if (pathname === '/api/model/auxiliary') {
-      json(response, 200, { main: { provider: 'codex', model: 'auto' }, tasks: [] })
-      return
-    }
-    if (pathname === '/api/profiles/sessions' || pathname === '/api/sessions') {
-      const limit = Number(url.searchParams.get('limit') || 40)
-      const rows = [...sessions.values()].sort((a, b) => b.lastActive - a.lastActive).map(sessionRow)
-      json(response, 200, {
-        limit,
-        offset: 0,
-        sessions: rows.slice(0, limit),
-        total: rows.length,
-        profile_totals: { default: rows.length }
-      })
-      return
-    }
-    if (pathname === '/api/sessions/search') {
-      json(response, 200, { results: [] })
-      return
-    }
-    const messagesMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/)
-    if (messagesMatch) {
-      const session = sessions.get(decodeURIComponent(messagesMatch[1]))
-      json(response, session ? 200 : 404, {
-        session_id: session?.id || decodeURIComponent(messagesMatch[1]),
-        messages: session?.messages || []
-      })
-      return
-    }
-    const sessionMatch = pathname.match(/^\/api\/sessions\/([^/]+)$/)
-    if (sessionMatch) {
-      const session = sessions.get(decodeURIComponent(sessionMatch[1]))
-      if (!session) {
-        json(response, 404, { error: 'session not found' })
-        return
-      }
-      if (request.method === 'PATCH') {
-        void readBody(request).then(body => {
-          if (typeof body.title === 'string' && body.title.trim()) {
-            session.title = body.title.trim()
-          }
-          json(response, 200, { ok: true, title: session.title })
-        })
-        return
-      }
-      json(response, 200, sessionRow(session))
-      return
-    }
-    if (pathname === '/api/cron/jobs') {
-      if (request.method === 'POST') {
-        void readBody(request).then(body => {
-          json(response, 200, {
-            id: `opl-cron-${Date.now().toString(36)}`,
-            enabled: false,
-            name: body.name || null,
-            prompt: body.prompt || null,
-            schedule: { expr: body.schedule || '', kind: 'manual', display: body.schedule || '' },
-            schedule_display: body.schedule || null,
-            state: 'candidate_disabled',
-            next_run_at: null,
-            last_run_at: null,
-            last_error: null,
-            deliver: body.deliver || null
-          })
-        })
-        return
-      }
-      json(response, 200, [])
-      return
-    }
-    if (pathname.startsWith('/api/cron/')) {
-      json(response, 200, pathname.endsWith('/runs') ? { runs: [] } : [])
-      return
-    }
-    if (pathname === '/api/skills') {
-      if (request.method !== 'GET') {
-        void readBody(request).then(body => {
-          json(response, 200, { ok: true, name: String(body.name || ''), enabled: Boolean(body.enabled) })
-        })
-        return
-      }
-      json(response, 200, [])
-      return
-    }
-    if (pathname === '/api/skills/toggle') {
-      void readBody(request).then(body => {
-        json(response, 200, { ok: true, name: String(body.name || ''), enabled: Boolean(body.enabled) })
-      })
-      return
-    }
-    if (pathname === '/api/tools/toolsets') {
-      json(response, 200, [])
-      return
-    }
-    const toolsetMatch = pathname.match(/^\/api\/tools\/toolsets\/([^/]+)(?:\/([^/]+))?$/)
-    if (toolsetMatch) {
-      const name = decodeURIComponent(toolsetMatch[1])
-      const suffix = toolsetMatch[2] || ''
-      if (suffix === 'config') {
-        json(response, 200, { name, has_category: false, providers: [], active_provider: null })
-        return
-      }
-      if (suffix === 'post-setup') {
-        json(response, 200, { ...actionResponse(`toolset:${name}:post-setup`), key: '' })
-        return
-      }
-      if (suffix === 'provider') {
-        void readBody(request).then(body => {
-          json(response, 200, { ok: true, name, provider: String(body.provider || '') })
-        })
-        return
-      }
-      void readBody(request).then(body => {
-        json(response, 200, { ok: true, name, enabled: Boolean(body.enabled) })
-      })
-      return
-    }
-    if (pathname === '/api/messaging/platforms') {
-      json(response, 200, { platforms: [] })
-      return
-    }
-    const messagingMatch = pathname.match(/^\/api\/messaging\/platforms\/([^/]+)(?:\/test)?$/)
-    if (messagingMatch) {
-      json(response, 200, pathname.endsWith('/test')
-        ? { ok: true, message: 'Candidate messaging bridge is disabled.' }
-        : { ok: true, platform: decodeURIComponent(messagingMatch[1]) })
-      return
-    }
-    if (pathname === '/api/profiles/active') {
-      json(response, 200, { active: 'default', current: 'default' })
-      return
-    }
-    if (pathname === '/api/profiles') {
-      if (request.method === 'POST') {
-        void readBody(request).then(body => {
-          const name = String(body.name || 'default')
-          json(response, 200, { ok: true, name, path: defaultCwd() })
-        })
-        return
-      }
-      json(response, 200, { profiles: [defaultProfile()] })
-      return
-    }
-    const profileMatch = pathname.match(/^\/api\/profiles\/([^/]+)(?:\/([^/]+))?$/)
-    if (profileMatch) {
-      const name = decodeURIComponent(profileMatch[1])
-      const suffix = profileMatch[2] || ''
-      if (suffix === 'soul') {
-        if (request.method === 'PUT') {
-          json(response, 200, { ok: true })
-          return
-        }
-        json(response, 200, { exists: false, content: '' })
-        return
-      }
-      if (suffix === 'setup-command') {
-        json(response, 200, { command: 'codex login' })
-        return
-      }
-      if (request.method === 'DELETE') {
-        json(response, 200, { ok: true, path: defaultCwd() })
-        return
-      }
-      void readBody(request).then(body => {
-        json(response, 200, { ok: true, name: String(body.new_name || name), path: defaultCwd() })
-      })
-      return
-    }
-    if (pathname === '/api/analytics/usage') {
-      const days = Math.max(1, Number(url.searchParams.get('days') || 30))
-      json(response, 200, emptyAnalytics(days))
-      return
-    }
-    if (pathname === '/api/gateway/restart' || pathname === '/api/hermes/update') {
-      json(response, 200, actionResponse(pathname.slice('/api/'.length).replace(/\//g, ':')))
-      return
-    }
-    if (pathname === '/api/hermes/update/check') {
-      json(response, 200, {
-        install_method: 'candidate',
-        current_version: 'opl-hermes-codex-candidate',
-        behind: 0,
-        update_available: false,
-        can_apply: false,
-        update_command: null,
-        message: null,
-        commits: []
-      })
-      return
-    }
-    const actionStatusMatch = pathname.match(/^\/api\/actions\/([^/]+)\/status$/)
-    if (actionStatusMatch) {
-      json(response, 200, {
-        name: decodeURIComponent(actionStatusMatch[1]),
-        pid: null,
-        running: false,
-        exit_code: 0,
-        lines: []
-      })
-      return
-    }
-    if (pathname === '/api/audio/transcribe') {
-      json(response, 200, { ok: false, provider: 'disabled', transcript: '' })
-      return
-    }
-    if (pathname === '/api/audio/speak') {
-      json(response, 200, { ok: false, provider: 'disabled', data_url: '', mime_type: 'audio/mpeg' })
-      return
-    }
-    if (pathname === '/api/audio/elevenlabs/voices') {
-      json(response, 200, { available: false, voices: [] })
-      return
-    }
-    json(response, 200, {})
+    unsupportedRest(response, request, pathname)
   }
 
   function send(socket, frame) {
@@ -569,6 +300,11 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
     const params = frame.params || {}
     const method = String(frame.method || '')
     try {
+      if (!isOplCodexBridgeRpcMethod(method)) {
+        log(`unsupported rpc ${method}; official Hermes backend owns this route`)
+        send(socket, { jsonrpc: '2.0', id, error: unsupportedPayload('rpc', method) })
+        return
+      }
       if (method === 'session.create') {
         const session = createSession(params)
         send(socket, {
@@ -635,6 +371,17 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
         send(socket, { jsonrpc: '2.0', id, result: { pending: false, title: session?.title || params.title || 'One Person Lab' } })
         return
       }
+      if (method === 'session.cwd.set') {
+        const session = sessions.get(String(params.session_id))
+        const cwd = typeof params.cwd === 'string' && params.cwd ? path.resolve(params.cwd) : defaultCwd()
+        if (session) {
+          session.cwd = cwd
+          session.lastActive = nowSeconds()
+          event(socket, 'session.info', session.id, runtimeInfo(session))
+        }
+        send(socket, { jsonrpc: '2.0', id, result: { cwd, branch: '' } })
+        return
+      }
       if (method === 'setup.status') {
         send(socket, { jsonrpc: '2.0', id, result: { provider_configured: true, provider: 'codex' } })
         return
@@ -653,25 +400,8 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
         })
         return
       }
-      if (method === 'reload.env' || method === 'reload.mcp' || method === 'config.set') {
-        send(socket, { jsonrpc: '2.0', id, result: { ok: true } })
-        return
-      }
       if (method === 'model.options') {
         send(socket, { jsonrpc: '2.0', id, result: modelOptions() })
-        return
-      }
-      if (method === 'commands.catalog') {
-        send(socket, { jsonrpc: '2.0', id, result: { categories: [], commands: [] } })
-        return
-      }
-      if (method === 'complete.path') {
-        send(socket, { jsonrpc: '2.0', id, result: { items: [] } })
-        return
-      }
-      if (method === 'session.cwd.set' || method === 'config.get') {
-        const cwd = typeof params.cwd === 'string' && params.cwd ? params.cwd : defaultCwd()
-        send(socket, { jsonrpc: '2.0', id, result: { cwd, branch: '' } })
         return
       }
       if (method === 'file.attach') {
@@ -704,16 +434,8 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
         })
         return
       }
-      if (method === 'process.list') {
-        send(socket, { jsonrpc: '2.0', id, result: { processes: [] } })
-        return
-      }
-      if (method === 'process.kill') {
-        send(socket, { jsonrpc: '2.0', id, result: { ok: true } })
-        return
-      }
-      log(`unhandled rpc ${method}; returning candidate empty result`)
-      send(socket, { jsonrpc: '2.0', id, result: { ok: true } })
+      log(`bridge-owned rpc ${method} has no handler`)
+      send(socket, { jsonrpc: '2.0', id, error: { message: `bridge-owned rpc ${method} has no handler` } })
     } catch (error) {
       send(socket, { jsonrpc: '2.0', id, error: { message: error instanceof Error ? error.message : String(error) } })
     }
@@ -894,4 +616,9 @@ function createOplCodexGateway({ rememberLog = () => undefined } = {}) {
   return { start, stop }
 }
 
-module.exports = { createOplCodexGateway }
+module.exports = {
+  createOplCodexGateway,
+  describeOplCodexGatewayScope,
+  isOplCodexBridgeRestRoute,
+  isOplCodexBridgeRpcMethod
+}

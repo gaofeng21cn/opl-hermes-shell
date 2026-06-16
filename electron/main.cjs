@@ -43,7 +43,7 @@ const { readWindowsUserEnvVar } = require('./windows-user-env.cjs')
 const { readDirForIpc } = require('./fs-read-dir.cjs')
 const { gitRootForIpc } = require('./git-root.cjs')
 const { worktreesForIpc } = require('./git-worktrees.cjs')
-const { createOplCodexGateway } = require('./opl-codex-gateway.cjs')
+const { seedOplHermesDefaults } = require('./opl-defaults.cjs')
 const { OFFICIAL_REPO_HTTPS_URL, isOfficialSshRemote } = require('./update-remote.cjs')
 const {
   buildPosixCleanupScript,
@@ -82,8 +82,6 @@ const {
 
 let nodePty = null
 let nodePtyDir = null
-let oplCodexGateway = null
-
 try {
   nodePty = require('node-pty')
   nodePtyDir = path.dirname(require.resolve('node-pty/package.json'))
@@ -4864,39 +4862,6 @@ async function prepareProfileDeleteRequest(request) {
 }
 
 async function startHermes() {
-  if (OPL_CODEX_CANDIDATE) {
-    if (!connectionPromise) {
-      connectionPromise = (async () => {
-        updateBootProgress({
-          phase: 'opl.codex.gateway',
-          message: 'Starting OPL Codex adapter',
-          progress: 92,
-          running: true,
-          error: null
-        })
-        if (!oplCodexGateway) {
-          oplCodexGateway = createOplCodexGateway({ rememberLog })
-        }
-        const descriptor = await oplCodexGateway.start()
-        updateBootProgress({
-          phase: 'backend.ready',
-          message: 'OPL Codex adapter is ready',
-          progress: 94,
-          running: true,
-          error: null
-        })
-        return {
-          ...descriptor,
-          ...getWindowState()
-        }
-      })().catch(error => {
-        connectionPromise = null
-        throw error
-      })
-    }
-    return connectionPromise
-  }
-
   // Latched-failure short-circuit: once bootstrap has failed in this
   // process, every subsequent startHermes() call re-throws the same error
   // without re-running install.ps1. This prevents the renderer's
@@ -4949,6 +4914,13 @@ async function startHermes() {
     }
     await advanceBootProgress('backend.runtime', 'Resolving Hermes runtime', 28)
     const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs))
+    if (OPL_CODEX_CANDIDATE) {
+      await seedOplHermesDefaults({
+        backend,
+        hermesHome: HERMES_HOME,
+        rememberLog
+      })
+    }
     const hermesCwd = resolveHermesCwd()
     const webDist = resolveWebDist()
 

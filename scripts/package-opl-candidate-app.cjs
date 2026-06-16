@@ -75,7 +75,7 @@ function assembleAppBundle() {
   fs.copyFileSync(path.join(root, 'assets/icon.icns'), path.join(resources, 'icon.icns'))
   fs.rmSync(path.join(resources, 'app'), { recursive: true, force: true })
   fs.mkdirSync(path.join(resources, 'app'), { recursive: true })
-  for (const entry of ['dist', 'electron', 'assets', 'package.json']) {
+  for (const entry of ['dist', 'electron', 'assets', 'public', 'package.json']) {
     fs.cpSync(path.join(root, entry), path.join(resources, 'app', entry), { recursive: true })
   }
   fs.cpSync(path.join(root, 'build/install-stamp.json'), path.join(resources, 'install-stamp.json'))
@@ -115,16 +115,24 @@ const manifest = {
   default_release_shell_unchanged: true,
   active_shell_adopted: false,
   hermes_runtime_authority_transfer: false,
+  official_hermes_backend_preserved: true,
   official_hermes_desktop_ui_reused: true,
   backend_bridge: {
-    electron_main_adapter: 'electron/opl-codex-gateway.cjs',
-    codex_cli_command: 'codex exec --json <prompt>',
-    hermes_runtime_authority_transfer: false
+    strategy: 'preserve_official_hermes_backend_first',
+    official_backend: 'Hermes first-launch bootstrap / hermes dashboard',
+    opl_defaults_seed: 'electron/opl-defaults.cjs seeds openai_runtime=codex_app_server and MAS/MAG/RCA skills.external_dirs without replacing backend',
+    executor_bridge_reference: 'electron/opl-codex-gateway.cjs declares replacesHermesBackend=false and is not the default backend',
+    planned_opl_executor_adapter: 'deeper OPL app state/action and route receipts above Hermes native backend',
+    forbidden_strategy: 'full backend replacement with minimal Codex shim',
+    hermes_runtime_authority_transfer: false,
+    codex_cli_command_reference: 'codex exec --json <prompt>'
   },
   implemented_capabilities: [
     'official_hermes_desktop_ui_reused',
+    'official_hermes_backend_preserved',
+    'opl_defaults_seed_for_codex_runtime_and_domain_skills',
+    'codex_bridge_scope_guard_reference',
     'opl_branding_and_icon_replaced',
-    'codex_cli_candidate_backend_adapter',
     'candidate_app_bundle_package'
   ],
   deferred_until_feature_comparison: [

@@ -1,7 +1,12 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { createOplCodexGateway } = require('./opl-codex-gateway.cjs')
+const {
+  createOplCodexGateway,
+  describeOplCodexGatewayScope,
+  isOplCodexBridgeRestRoute,
+  isOplCodexBridgeRpcMethod
+} = require('./opl-codex-gateway.cjs')
 
 async function withGateway(fn) {
   const gateway = createOplCodexGateway()
@@ -17,6 +22,11 @@ async function getJson(baseUrl, path) {
   const response = await fetch(`${baseUrl}${path}`)
   assert.equal(response.ok, true, `${path} should return 2xx`)
   return response.json()
+}
+
+async function requestJson(baseUrl, path, options = {}) {
+  const response = await fetch(`${baseUrl}${path}`, options)
+  return { response, body: await response.json() }
 }
 
 function requestRpc(wsUrl, method, params = {}) {
@@ -97,25 +107,13 @@ async function openGatewaySocket(wsUrl) {
 
 test('OPL Codex gateway returns renderer-safe startup REST shapes', async () => {
   await withGateway(async descriptor => {
-    const activeProfile = await getJson(descriptor.baseUrl, '/api/profiles/active')
-    assert.deepEqual(activeProfile, { active: 'default', current: 'default' })
-
-    const profiles = await getJson(descriptor.baseUrl, '/api/profiles')
-    assert.equal(Array.isArray(profiles.profiles), true)
-    assert.equal(profiles.profiles[0].name, 'default')
-
-    const oauth = await getJson(descriptor.baseUrl, '/api/providers/oauth')
-    assert.deepEqual(oauth, { providers: [] })
-
     const models = await getJson(descriptor.baseUrl, '/api/model/options')
     assert.equal(Array.isArray(models.providers), true)
     assert.equal(models.providers[0].slug, 'codex')
     assert.equal(Array.isArray(models.providers[0].models), true)
 
-    const analytics = await getJson(descriptor.baseUrl, '/api/analytics/usage?days=7')
-    assert.equal(Array.isArray(analytics.daily), true)
-    assert.equal(Array.isArray(analytics.by_model), true)
-    assert.equal(Array.isArray(analytics.skills.top_skills), true)
+    const status = await getJson(descriptor.baseUrl, '/api/status')
+    assert.equal(status.backend, 'codex-cli-adapter')
   })
 })
 
@@ -129,10 +127,45 @@ test('OPL Codex gateway returns renderer-safe startup RPC shapes', async () => {
 
     const models = await requestRpc(descriptor.wsUrl, 'model.options')
     assert.equal(Array.isArray(models.providers), true)
+  })
+})
 
-    const commands = await requestRpc(descriptor.wsUrl, 'commands.catalog')
-    assert.equal(Array.isArray(commands.commands), true)
-    assert.equal(Array.isArray(commands.categories), true)
+test('OPL Codex gateway scope helper documents executor bridge ownership', () => {
+  const scope = describeOplCodexGatewayScope()
+
+  assert.equal(scope.mode, 'executor_agent_route_bridge')
+  assert.equal(scope.replacesHermesBackend, false)
+  assert.equal(isOplCodexBridgeRpcMethod('prompt.submit'), true)
+  assert.equal(isOplCodexBridgeRpcMethod('commands.catalog'), false)
+  assert.equal(isOplCodexBridgeRestRoute('GET', '/api/model/options'), true)
+  assert.equal(isOplCodexBridgeRestRoute('GET', '/api/profiles'), false)
+  assert.equal(scope.upstreamHermesBackendOwns.includes('profiles'), true)
+  assert.equal(scope.upstreamHermesBackendOwns.includes('command catalog'), true)
+})
+
+test('OPL Codex gateway refuses official Hermes backend REST endpoints instead of returning empty success', async () => {
+  await withGateway(async descriptor => {
+    const profiles = await requestJson(descriptor.baseUrl, '/api/profiles')
+    assert.equal(profiles.response.status, 501)
+    assert.equal(profiles.body.error, 'opl_codex_bridge_not_full_backend')
+    assert.equal(profiles.body.route_owner, 'official_hermes_backend')
+
+    const analytics = await requestJson(descriptor.baseUrl, '/api/analytics/usage?days=7')
+    assert.equal(analytics.response.status, 501)
+    assert.equal(analytics.body.name, 'GET /api/analytics/usage')
+  })
+})
+
+test('OPL Codex gateway refuses official Hermes backend RPC methods instead of returning empty success', async () => {
+  await withGateway(async descriptor => {
+    await assert.rejects(
+      () => requestRpc(descriptor.wsUrl, 'commands.catalog'),
+      /opl_codex_bridge_not_full_backend|Hermes backend owns this route/
+    )
+    await assert.rejects(
+      () => requestRpc(descriptor.wsUrl, 'complete.path', { prefix: '/tmp' }),
+      /opl_codex_bridge_not_full_backend|Hermes backend owns this route/
+    )
   })
 })
 
