@@ -57,13 +57,19 @@ assert(
   'OPL bootstrap interception must happen before the official Hermes installer path'
 )
 assert(fs.existsSync(path.join(root, 'electron/opl-bootstrap-runner.cjs')), 'candidate must include electron/opl-bootstrap-runner.cjs')
+assert(fs.existsSync(path.join(root, 'electron/opl-startup-marker.cjs')), 'candidate must include electron/opl-startup-marker.cjs')
 assert(fs.existsSync(path.join(root, 'electron/opl-bootstrap-runner.test.cjs')), 'candidate must include electron/opl-bootstrap-runner.test.cjs')
 assert(fs.existsSync(path.join(root, 'electron/opl-codex-gateway.test.cjs')), 'candidate must include electron/opl-codex-gateway.test.cjs')
+assert(oplBootstrapRunner.includes("require('./opl-startup-marker.cjs')"), 'OPL bootstrap runner must use the OPL startup marker')
+assert(oplBootstrapRunner.includes('classifyStartupMarker'), 'OPL bootstrap runner must classify startup marker before full initialize')
+assert(oplBootstrapRunner.includes("startupMode: 'lightweight'"), 'OPL bootstrap runner must support lightweight startup')
 assert(oplBootstrapRunner.includes("'system', 'initialize', '--json'"), 'OPL bootstrap runner must call opl system initialize --json')
 assert(oplBootstrapRunner.includes("'install', '--skip-gui-open', '--skip-modules', '--skip-native-helper-repair', '--json'"), 'OPL bootstrap runner must run OPL core install without opening GUI')
 assert(oplBootstrapRunner.includes("'system', 'startup-maintenance', '--json'"), 'OPL bootstrap runner must run startup maintenance when configured')
 assert(oplBootstrapRunner.includes("'system', 'reconcile-modules', '--json'"), 'OPL bootstrap runner must reconcile modules when configured')
 assert(oplBootstrapRunner.includes('maintenanceDeferred'), 'OPL bootstrap runner must defer maintenance until after adapter readiness')
+assert(mainProcess.includes('OPL_STARTUP_MARKER_PATH'), 'main process must provide an OPL startup marker path')
+assert(mainProcess.includes('removeOplStartupMarker(OPL_STARTUP_MARKER_PATH)'), 'bootstrap repair must clear the OPL startup marker')
 assert(mainProcess.includes('startOplMaintenanceInBackground'), 'main process must start deferred OPL maintenance after adapter readiness')
 assert(read('electron/opl-defaults.cjs').includes("openai_runtime"), 'OPL defaults must seed Codex app-server runtime')
 assert(read('electron/opl-defaults.cjs').includes("external_dirs"), 'OPL defaults must seed Hermes external skill dirs')
@@ -110,19 +116,20 @@ if (requireApp) {
   assert(fs.existsSync(path.join(packagedAppRoot, 'electron/opl-defaults.cjs')), 'packaged app must include OPL defaults seed')
   const packagedBootstrap = fs.readFileSync(path.join(packagedAppRoot, 'electron/opl-bootstrap-runner.cjs'), 'utf8')
   const packagedGateway = fs.readFileSync(path.join(packagedAppRoot, 'electron/opl-codex-gateway.cjs'), 'utf8')
+  assert(fs.existsSync(path.join(packagedAppRoot, 'electron/opl-startup-marker.cjs')), 'packaged app must include OPL startup marker helper')
   for (const stage of [
     'opl-cli-check',
     'codex-cli-check',
     'opl-initialize',
     'opl-core-setup',
     'opl-post-setup-check',
-    'opl-model-access',
     'opl-codex-adapter',
     'opl-maintenance-schedule'
   ]) {
     assert(packagedBootstrap.includes(`name: '${stage}'`), `packaged bootstrap runner must include ${stage}`)
   }
   assert(packagedGateway.includes("'app-server', '--listen', 'stdio://'"), 'packaged adapter must spawn Codex app-server over stdio')
+  assert(packagedBootstrap.includes('classifyStartupMarker'), 'packaged bootstrap runner must support marker-based lightweight startup')
   assert(packagedGateway.includes("'thread/start'"), 'packaged adapter must include thread/start mapping')
   assert(packagedGateway.includes("'turn/start'"), 'packaged adapter must include turn/start mapping')
   assert(packagedGateway.includes("'item/agentMessage/delta'"), 'packaged adapter must include agent delta mapping')

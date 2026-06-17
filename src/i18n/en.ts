@@ -267,10 +267,10 @@ export const en: Translations = {
     exportFailed: 'Export failed',
     resetFailed: 'Reset failed',
     nav: {
-      providers: 'Providers',
-      providerAccounts: 'Accounts',
-      providerApiKeys: 'API keys',
-      gateway: 'Gateway',
+      providers: 'Model Access',
+      providerAccounts: 'Model Access',
+      providerApiKeys: 'Model Access',
+      gateway: 'Connection diagnostics',
       apiKeys: 'Tools & Keys',
       keysTools: 'Tools',
       keysSettings: 'Settings',
@@ -318,7 +318,7 @@ export const en: Translations = {
       completionSoundPreview: 'Preview'
     },
     sections: {
-      model: 'Model',
+      model: 'Model Strategy',
       chat: 'Chat',
       appearance: 'Appearance',
       workspace: 'Workspace',
@@ -328,10 +328,10 @@ export const en: Translations = {
       advanced: 'Advanced'
     },
     searchPlaceholder: {
-      about: 'About Hermes Desktop',
+      about: 'About One Person Lab',
       config: 'Search settings...',
-      gateway: 'Gateway connection...',
-      keys: 'Search API keys...',
+      gateway: 'Connection diagnostics...',
+      keys: 'Search keys...',
       mcp: 'Search MCP servers...',
       sessions: 'Search archived sessions...'
     },
@@ -402,7 +402,7 @@ export const en: Translations = {
       noneParen: '(none)',
       notSet: 'Not set',
       commaSeparated: 'comma-separated values',
-      loading: 'Loading Hermes configuration...',
+      loading: 'Loading One Person Lab configuration...',
       emptyTitle: 'Nothing to configure',
       emptyDesc: 'This section has no adjustable settings.',
       failedLoad: 'Settings failed to load',
@@ -533,21 +533,22 @@ export const en: Translations = {
       saveServer: 'Save server'
     },
     model: {
-      loading: 'Loading model configuration...',
-      appliesDesc: 'Applies to new sessions. Use the model picker in the composer to hot-swap the active chat.',
-      provider: 'Provider',
-      model: 'Model',
+      loading: 'Loading model strategy...',
+      appliesDesc: 'Automatically follows the current One Person Lab / Codex recommended model. The composer still shows the effective model for the current chat.',
+      provider: 'Model access',
+      model: 'Current model',
       applying: 'Applying...',
       defaultsLabel: 'Defaults',
       reasoning: 'Reasoning',
       reasoningOff: 'Off',
       defaultsFailed: 'Failed to save model defaults',
-      auxiliaryTitle: 'Auxiliary models',
-      resetAllToMain: 'Reset all to main',
-      auxiliaryDesc: 'Helper tasks run on the main model by default. Assign a dedicated model to any task to override.',
+      auxiliaryTitle: 'Task model strategy',
+      resetAllToMain: 'Follow main model',
+      auxiliaryDesc:
+        'The OPL candidate keeps vision, web extraction, compression, skills hub, approval, MCP, and title generation on the main model instead of exposing separate model slots.',
       setToMain: 'Set to main',
-      change: 'Change',
-      autoUseMain: 'auto · use main model',
+      change: 'View',
+      autoUseMain: 'auto · follow main model',
       providerDefault: '(provider default)',
       tasks: {
         vision: { label: 'Vision', hint: 'Image analysis' },
@@ -561,10 +562,10 @@ export const en: Translations = {
       }
     },
     providers: {
-      connectAccount: 'Connect an account',
-      haveApiKey: 'Have an API key instead?',
+      connectAccount: 'Model access',
+      haveApiKey: 'Configure API key',
       intro:
-        'Sign in with a subscription — no API key to copy. Hermes runs the browser sign-in for you, right here in the app.',
+        'One Person Lab only asks for the gflabtoken API key here. Other compatible providers, OAuth accounts, and custom Base URLs are not exposed in the ordinary path.',
       connected: 'Connected',
       collapse: 'Collapse',
       connectAnother: 'Connect another provider',
@@ -580,8 +581,8 @@ export const en: Translations = {
       removedTitle: 'Account removed',
       removedMessage: provider => `${provider} was removed.`,
       failedRemove: provider => `Could not remove ${provider}`,
-      noProviderKeys: 'No provider API keys available.',
-      loading: 'Loading providers...'
+      noProviderKeys: 'No model access key is configurable.',
+      loading: 'Loading model access...'
     },
     sessions: {
       loading: 'Loading archived sessions…',

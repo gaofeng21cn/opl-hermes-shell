@@ -3,6 +3,11 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
+const {
+  readOplStartupMarker,
+  validateOplStartupMarker,
+  writeOplStartupMarker
+} = require('./opl-startup-marker.cjs')
 
 const IS_WINDOWS = process.platform === 'win32'
 
@@ -36,12 +41,6 @@ const STAGES = [
     title: 'Verify One Person Lab setup',
     category: 'opl',
     needs_user_input: false
-  },
-  {
-    name: 'opl-model-access',
-    title: 'Check model access',
-    category: 'opl',
-    needs_user_input: true
   },
   {
     name: 'opl-codex-adapter',
@@ -334,6 +333,52 @@ function hasOnlyApiKeyBlocker(initializePayload) {
   return blockers.every(item => item === 'codex_config' || /api|key|codex_config/i.test(item))
 }
 
+function requiredCoreMissing(requiredCorePaths = []) {
+  const missing = []
+  for (const item of requiredCorePaths || []) {
+    const filePath = typeof item === 'string' ? item : item?.path
+    if (!filePath) continue
+    try {
+      const stat = fs.statSync(filePath)
+      if (stat.isFile() || stat.isDirectory()) continue
+    } catch {
+      void 0
+    }
+    missing.push(typeof item === 'string' ? item : (item.label || item.path))
+  }
+  return missing
+}
+
+function classifyStartupMarker({ markerPath, requiredCorePaths }) {
+  const marker = readOplStartupMarker(markerPath)
+  const markerStatus = validateOplStartupMarker(marker)
+  const missingCore = requiredCoreMissing(requiredCorePaths)
+
+  if (!markerStatus.ok) {
+    return {
+      needsInitialize: true,
+      reason: markerStatus.reason,
+      marker,
+      missingCore
+    }
+  }
+  if (missingCore.length > 0) {
+    return {
+      needsInitialize: true,
+      reason: 'core_missing',
+      marker,
+      missingCore
+    }
+  }
+
+  return {
+    needsInitialize: false,
+    reason: 'marker_current',
+    marker,
+    missingCore
+  }
+}
+
 async function runJsonStage({ name, command, args, cwd, env, abortSignal, emit, timeoutMs }) {
   const startedAt = Date.now()
   emit({ type: 'stage', name, state: 'running' })
@@ -434,6 +479,21 @@ async function runBestEffortJsonStage({
 }
 
 async function runOplMaintenanceStages({ cwd, env, abortSignal, emit, emitOutput = false }) {
+  const status = await runBestEffortJsonStage({
+    name: 'opl-background-status-refresh',
+    command: 'opl',
+    args: ['system', 'initialize', '--json'],
+    cwd,
+    env,
+    abortSignal,
+    emit,
+    timeoutMs: 180_000,
+    emitOutput,
+    captureOutput: false,
+    parseJson: false
+  })
+  if (!status.ok) return status
+
   const startup = await runBestEffortJsonStage({
     name: 'opl-startup-maintenance',
     command: 'opl',
@@ -464,7 +524,7 @@ async function runOplMaintenanceStages({ cwd, env, abortSignal, emit, emitOutput
   })
   if (!reconcile.ok) return reconcile
 
-  return { ok: true, startup, reconcile }
+  return { ok: true, status, startup, reconcile }
 }
 
 async function runOplBootstrap(opts = {}) {
@@ -472,6 +532,8 @@ async function runOplBootstrap(opts = {}) {
     cwd = process.env.HOME || process.cwd(),
     env = process.env,
     logRoot = path.join(process.env.HOME || process.cwd(), 'Library', 'Logs', 'One Person Lab'),
+    markerPath = null,
+    requiredCorePaths = [],
     onEvent,
     abortSignal
   } = opts
@@ -524,6 +586,53 @@ async function runOplBootstrap(opts = {}) {
     })
     if (!codexCli.ok) return codexCli
 
+    const startupMarker = classifyStartupMarker({ markerPath, requiredCorePaths })
+    if (!startupMarker.needsInitialize) {
+      const needsApiKey = startupMarker.marker?.api_key_present === false
+      emitStage(emit, 'opl-initialize', 'skipped', {
+        reason: 'OPL startup marker is current; full status refresh runs in the background.'
+      })
+      emitStage(emit, 'opl-core-setup', 'skipped', {
+        reason: 'One Person Lab core components are already available.'
+      })
+      emitStage(emit, 'opl-post-setup-check', 'skipped', {
+        reason: 'No one-time setup changes required.'
+      })
+      if (needsApiKey) {
+        emit({
+          type: 'route',
+          route: 'model-access',
+          reason: 'API key entry continues in the model access screen.',
+          needsApiKey: true
+        })
+      }
+      emitStage(emit, 'opl-codex-adapter', 'succeeded')
+      emitStage(emit, 'opl-maintenance-schedule', 'succeeded')
+      const marker = {
+        ...startupMarker.marker,
+        startup_path: 'lightweight',
+        marker_reason: startupMarker.reason,
+        maintenance_deferred: true
+      }
+      emit({ type: 'complete', marker })
+      return {
+        ok: true,
+        initialize: null,
+        marker,
+        needsApiKey,
+        maintenanceDeferred: true,
+        startupMode: 'lightweight'
+      }
+    }
+
+    emit({ type: 'log', line: `[opl-bootstrap] running one-time initialization: ${startupMarker.reason}` })
+    if (startupMarker.missingCore.length > 0) {
+      emit({
+        type: 'log',
+        line: `[opl-bootstrap] missing core components: ${startupMarker.missingCore.join(', ')}`
+      })
+    }
+
     const first = await runJsonStage({
       name: 'opl-initialize',
       command: 'opl',
@@ -572,11 +681,12 @@ async function runOplBootstrap(opts = {}) {
       })
     }
 
-    if (apiKeyPresent(initial)) {
-      emitStage(emit, 'opl-model-access', 'succeeded')
-    } else {
-      emitStage(emit, 'opl-model-access', 'skipped', {
-        reason: 'API key entry continues in the model access screen.'
+    if (!apiKeyPresent(initial)) {
+      emit({
+        type: 'route',
+        route: 'model-access',
+        reason: 'API key entry continues in the model access screen.',
+        needsApiKey: true
       })
     }
 
@@ -599,19 +709,26 @@ async function runOplBootstrap(opts = {}) {
     }
 
     const marker = {
-      kind: 'opl-app-initialize',
+      startup_path: 'initialized',
+      marker_reason: startupMarker.reason,
       ready_to_launch: readyToLaunch(initial),
       api_key_present: apiKeyPresent(initial),
-      maintenance_deferred: apiKeyPresent(initial),
-      completed_at: new Date().toISOString()
+      maintenance_deferred: true,
+      missing_core: startupMarker.missingCore
     }
-    emit({ type: 'complete', marker })
+    const persistedMarker = writeOplStartupMarker(markerPath, marker) || {
+      kind: 'opl-app-initialize',
+      ...marker,
+      completedAt: new Date().toISOString()
+    }
+    emit({ type: 'complete', marker: persistedMarker })
     return {
       ok: true,
       initialize: initial,
-      marker,
+      marker: persistedMarker,
       needsApiKey: !apiKeyPresent(initial),
-      maintenanceDeferred: apiKeyPresent(initial)
+      maintenanceDeferred: true,
+      startupMode: 'initialized'
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -634,6 +751,8 @@ module.exports = {
   getSetupFlow,
   hasOnlyApiKeyBlocker,
   readyToLaunch,
+  classifyStartupMarker,
+  requiredCoreMissing,
   runCommand,
   runOplMaintenanceStages,
   runOplBootstrap

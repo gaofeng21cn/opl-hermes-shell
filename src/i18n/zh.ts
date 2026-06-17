@@ -263,10 +263,10 @@ export const zh: Translations = {
     exportFailed: '导出失败',
     resetFailed: '重置失败',
     nav: {
-      providers: '提供方',
-      providerAccounts: '账号',
-      providerApiKeys: 'API 密钥',
-      gateway: '网关',
+      providers: '模型访问',
+      providerAccounts: '模型访问',
+      providerApiKeys: '模型访问',
+      gateway: '连接诊断',
       apiKeys: '工具与密钥',
       keysTools: '工具',
       keysSettings: '设置',
@@ -313,7 +313,7 @@ export const zh: Translations = {
       completionSoundPreview: '预览'
     },
     sections: {
-      model: '模型',
+      model: '模型策略',
       chat: '对话',
       appearance: '外观',
       workspace: '工作区',
@@ -323,10 +323,10 @@ export const zh: Translations = {
       advanced: '高级'
     },
     searchPlaceholder: {
-      about: '关于 Hermes Desktop',
+      about: '关于 One Person Lab',
       config: '搜索设置…',
-      gateway: '网关连接…',
-      keys: '搜索 API 密钥…',
+      gateway: '连接诊断…',
+      keys: '搜索密钥…',
       mcp: '搜索 MCP 服务器…',
       sessions: '搜索已归档会话…'
     },
@@ -600,7 +600,7 @@ export const zh: Translations = {
       noneParen: '(无)',
       notSet: '未设置',
       commaSeparated: '逗号分隔的值',
-      loading: '正在加载 Hermes 配置...',
+      loading: '正在加载 One Person Lab 配置...',
       emptyTitle: '无可配置项',
       emptyDesc: '此分区没有可调整的设置。',
       failedLoad: '设置加载失败',
@@ -728,21 +728,21 @@ export const zh: Translations = {
       saveServer: '保存服务器'
     },
     model: {
-      loading: '正在加载模型配置...',
-      appliesDesc: '应用于新会话。可在输入框的模型选择器中临时切换当前对话。',
-      provider: '提供方',
-      model: '模型',
+      loading: '正在加载模型策略...',
+      appliesDesc: '自动跟随 One Person Lab / Codex 当前推荐模型；当前会话仍可在输入框中查看实际模型。',
+      provider: '模型访问',
+      model: '当前模型',
       applying: '应用中...',
       defaultsLabel: '默认值',
       reasoning: '推理',
       reasoningOff: '关闭',
       defaultsFailed: '保存模型默认值失败',
-      auxiliaryTitle: '辅助模型',
-      resetAllToMain: '全部重置为主模型',
-      auxiliaryDesc: '辅助任务默认使用主模型。你可以为任意任务指定专用模型。',
+      auxiliaryTitle: '任务模型策略',
+      resetAllToMain: '全部跟随主模型',
+      auxiliaryDesc: '当前 OPL 候选版本让视觉、网页提取、压缩、技能中心、审批、MCP 和标题生成全部跟随主模型，不暴露单独模型槽位。',
       setToMain: '设为主模型',
-      change: '更改',
-      autoUseMain: '自动 · 使用主模型',
+      change: '查看',
+      autoUseMain: '自动 · 跟随主模型',
       providerDefault: '(提供方默认)',
       tasks: {
         vision: { label: '视觉', hint: '图片分析' },
@@ -756,9 +756,9 @@ export const zh: Translations = {
       }
     },
     providers: {
-      connectAccount: '连接账号',
-      haveApiKey: '改用 API 密钥？',
-      intro: '使用订阅登录，无需复制 API 密钥。Hermes 会在应用中为你完成浏览器登录。',
+      connectAccount: '模型访问',
+      haveApiKey: '配置 API key',
+      intro: 'One Person Lab 只需要配置 gflabtoken API key。这里不提供其他兼容提供方、OAuth 账号或自定义 Base URL。',
       connected: '已连接',
       collapse: '收起',
       connectAnother: '连接其他提供方',
@@ -773,8 +773,8 @@ export const zh: Translations = {
       removedTitle: '账号已移除',
       removedMessage: provider => `${provider} 已移除。`,
       failedRemove: provider => `无法移除 ${provider}`,
-      noProviderKeys: '没有可用的提供方 API 密钥。',
-      loading: '正在加载提供方...'
+      noProviderKeys: '没有可配置的模型访问密钥。',
+      loading: '正在加载模型访问配置...'
     },
     sessions: {
       loading: '正在加载已归档会话…',

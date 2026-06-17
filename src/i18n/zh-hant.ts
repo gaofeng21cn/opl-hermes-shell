@@ -175,10 +175,10 @@ export const zhHant = defineLocale({
     exportFailed: '匯出失敗',
     resetFailed: '重設失敗',
     nav: {
-      providers: '提供方',
-      providerAccounts: '帳號',
-      providerApiKeys: 'API 金鑰',
-      gateway: '閘道',
+      providers: '模型存取',
+      providerAccounts: '模型存取',
+      providerApiKeys: '模型存取',
+      gateway: '連線診斷',
       apiKeys: '工具與金鑰',
       keysTools: '工具',
       keysSettings: '設定',
@@ -225,7 +225,7 @@ export const zhHant = defineLocale({
       completionSoundPreview: '預覽'
     },
     sections: {
-      model: '模型',
+      model: '模型策略',
       chat: '聊天',
       appearance: '外觀',
       workspace: '工作區',
@@ -235,10 +235,10 @@ export const zhHant = defineLocale({
       advanced: '進階'
     },
     searchPlaceholder: {
-      about: '關於 Hermes Desktop',
+      about: '關於 One Person Lab',
       config: '搜尋設定…',
-      gateway: '閘道連線…',
-      keys: '搜尋 API 金鑰…',
+      gateway: '連線診斷…',
+      keys: '搜尋金鑰…',
       mcp: '搜尋 MCP 伺服器…',
       sessions: '搜尋已封存工作階段…'
     },
@@ -640,17 +640,17 @@ export const zhHant = defineLocale({
       saveServer: '儲存伺服器'
     },
     model: {
-      loading: '正在載入模型設定...',
-      appliesDesc: '套用至新工作階段。可在輸入框的模型選擇器中臨時切換目前對話。',
-      provider: '提供方',
-      model: '模型',
+      loading: '正在載入模型策略...',
+      appliesDesc: '自動跟隨 One Person Lab / Codex 目前推薦模型；目前對話仍可在輸入框查看實際模型。',
+      provider: '模型存取',
+      model: '目前模型',
       applying: '套用中...',
-      auxiliaryTitle: '輔助模型',
-      resetAllToMain: '全部重設為主要模型',
-      auxiliaryDesc: '輔助任務預設使用主要模型。您可以為任何任務指定專用模型。',
+      auxiliaryTitle: '任務模型策略',
+      resetAllToMain: '全部跟隨主要模型',
+      auxiliaryDesc: '目前 OPL 候選版本讓視覺、網頁擷取、壓縮、技能中心、審批、MCP 與標題生成全部跟隨主要模型，不暴露單獨模型槽位。',
       setToMain: '設為主要模型',
-      change: '變更',
-      autoUseMain: '自動 · 使用主要模型',
+      change: '查看',
+      autoUseMain: '自動 · 跟隨主要模型',
       providerDefault: '(提供方預設)',
       tasks: {
         vision: { label: '視覺', hint: '圖片分析' },
@@ -664,9 +664,9 @@ export const zhHant = defineLocale({
       }
     },
     providers: {
-      connectAccount: '連結帳號',
-      haveApiKey: '改用 API 金鑰？',
-      intro: '使用訂閱登入，無需複製 API 金鑰。Hermes 會在應用程式中為您完成瀏覽器登入。',
+      connectAccount: '模型存取',
+      haveApiKey: '設定 API key',
+      intro: 'One Person Lab 只需要設定 gflabtoken API key。這裡不提供其他相容提供方、OAuth 帳號或自訂 Base URL。',
       connected: '已連線',
       collapse: '收合',
       connectAnother: '連結其他提供方',
@@ -676,8 +676,8 @@ export const zhHant = defineLocale({
       removedTitle: '帳號已移除',
       removedMessage: provider => `${provider} 已移除。`,
       failedRemove: provider => `無法移除 ${provider}`,
-      noProviderKeys: '沒有可用的提供方 API 金鑰。',
-      loading: '正在載入提供方...'
+      noProviderKeys: '沒有可設定的模型存取金鑰。',
+      loading: '正在載入模型存取設定...'
     },
     sessions: {
       loading: '正在載入已封存工作階段…',

@@ -39,6 +39,12 @@ export const CONTROL_TEXT = 'text-xs'
 
 export const PROVIDER_GROUPS: ProviderPrefix[] = [
   {
+    prefix: 'OPENAI_API_KEY',
+    name: 'gflabtoken',
+    description: 'One Person Lab model access API key',
+    priority: 0
+  },
+  {
     prefix: 'NOUS_',
     name: 'Nous Portal',
     description: 'Hosted Hermes & Nous-trained models',

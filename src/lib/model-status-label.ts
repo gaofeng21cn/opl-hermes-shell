@@ -118,5 +118,11 @@ export function formatModelStatusLabel(
   // current reasoning level is visible at a glance, not just when non-default.
   parts.push(reasoningEffortLabel(options?.reasoningEffort ?? '') || 'Med')
 
-  return `${name} · ${parts.join(' ')}`
+  const suffix = parts.join(' ')
+
+  if (modelBaseId(model) === 'gpt-5.5' && suffix === 'Max') {
+    return `Auto · ${name} ${suffix}`
+  }
+
+  return `${name} · ${suffix}`
 }

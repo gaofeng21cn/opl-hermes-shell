@@ -32,6 +32,12 @@ describe('model-status-label', () => {
     expect(formatModelStatusLabel('openai/gpt-5.5')).toBe('GPT-5.5 · Med')
   })
 
+  it('labels the current OPL recommended max model as Auto without treating auto as a model id', () => {
+    expect(formatModelStatusLabel('openai/gpt-5.5', { reasoningEffort: 'xhigh' })).toBe(
+      'Auto · GPT-5.5 Max'
+    )
+  })
+
   it('returns just the placeholder name when there is no model', () => {
     expect(formatModelStatusLabel('')).toBe('No model')
   })

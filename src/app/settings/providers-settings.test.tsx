@@ -1,100 +1,91 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { atom } from 'nanostores'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { OAuthProvider } from '@/types/hermes'
-
-const listOAuthProviders = vi.fn()
-const disconnectOAuthProvider = vi.fn()
 const getEnvVars = vi.fn()
-const startManualProviderOAuth = vi.fn()
-const onboarding = atom({ manual: false })
+const setEnvVar = vi.fn()
+const deleteEnvVar = vi.fn()
+const revealEnvVar = vi.fn()
 
 vi.mock('@/hermes', () => ({
-  disconnectOAuthProvider: (providerId: string) => disconnectOAuthProvider(providerId),
+  deleteEnvVar: (key: string) => deleteEnvVar(key),
   getEnvVars: () => getEnvVars(),
-  listOAuthProviders: () => listOAuthProviders()
+  revealEnvVar: (key: string) => revealEnvVar(key),
+  setEnvVar: (key: string, value: string) => setEnvVar(key, value)
 }))
 
-vi.mock('@/store/onboarding', () => ({
-  $desktopOnboarding: onboarding,
-  startManualProviderOAuth: (providerId: string) => startManualProviderOAuth(providerId)
+vi.mock('@/store/notifications', () => ({
+  notify: vi.fn(),
+  notifyError: vi.fn()
 }))
-
-function provider(id: string, loggedIn: boolean, patch: Partial<OAuthProvider> = {}): OAuthProvider {
-  return {
-    cli_command: `hermes auth add ${id}`,
-    disconnectable: true,
-    docs_url: '',
-    flow: 'device_code',
-    id,
-    name: id === 'nous' ? 'Nous Portal' : 'MiniMax',
-    status: {
-      logged_in: loggedIn
-    },
-    ...patch
-  }
-}
 
 beforeEach(() => {
-  onboarding.set({ manual: false })
-  getEnvVars.mockResolvedValue({})
-  disconnectOAuthProvider.mockResolvedValue({ ok: true, provider: 'nous' })
-  listOAuthProviders.mockResolvedValue({
-    providers: [provider('nous', true), provider('minimax-oauth', false)]
+  getEnvVars.mockResolvedValue({
+    OPENAI_API_KEY: {
+      advanced: false,
+      category: 'provider',
+      description: 'gflabtoken API key used by One Person Lab model access.',
+      is_password: true,
+      is_set: false,
+      redacted_value: null,
+      tools: ['codex'],
+      url: null
+    },
+    OPENAI_BASE_URL: {
+      advanced: true,
+      category: 'provider',
+      description: 'OpenAI-compatible Base URL',
+      is_password: false,
+      is_set: false,
+      redacted_value: null,
+      tools: ['codex'],
+      url: null
+    },
+    NOUS_API_KEY: {
+      advanced: false,
+      category: 'provider',
+      description: 'Nous Portal key',
+      is_password: true,
+      is_set: false,
+      redacted_value: null,
+      tools: ['hermes'],
+      url: null
+    }
   })
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  setEnvVar.mockResolvedValue({ ok: true })
+  deleteEnvVar.mockResolvedValue({ ok: true })
+  revealEnvVar.mockResolvedValue({ key: 'OPENAI_API_KEY', value: 'sk-test' })
 })
 
 afterEach(() => {
   cleanup()
-  vi.restoreAllMocks()
   vi.clearAllMocks()
 })
 
 async function renderProvidersSettings() {
   const { ProvidersSettings } = await import('./providers-settings')
 
-  return render(<ProvidersSettings onClose={vi.fn()} onViewChange={vi.fn()} view="accounts" />)
+  return render(<ProvidersSettings />)
 }
 
 describe('ProvidersSettings', () => {
-  it('disconnects a connected provider account and refreshes the accounts list', async () => {
+  it('shows only the One Person Lab gflabtoken model-access key in the ordinary provider page', async () => {
     await renderProvidersSettings()
 
-    const remove = await screen.findByRole('button', { name: 'Remove Nous Portal' })
-    fireEvent.click(remove)
-
-    await waitFor(() => expect(disconnectOAuthProvider).toHaveBeenCalledWith('nous'))
-    expect(listOAuthProviders).toHaveBeenCalledTimes(2)
+    expect(await screen.findByText('gflabtoken')).toBeTruthy()
+    expect(screen.getByText(/gflabtoken API key/)).toBeTruthy()
+    expect(screen.queryByText(/OpenAI-compatible Base URL/)).toBeNull()
+    expect(screen.queryByText(/Nous Portal/)).toBeNull()
   })
 
-  it('keeps provider selection separate from account removal', async () => {
+  it('saves the gflabtoken API key through the single accepted env var', async () => {
     await renderProvidersSettings()
 
-    fireEvent.click(await screen.findByText('Nous Portal'))
+    const input = await screen.findByPlaceholderText(/Paste gflabtoken key/i)
+    fireEvent.change(input, { target: { value: 'sk-gflab-test' } })
+    const saveButton = screen.getAllByRole('button', { name: /Save/i }).find(element => element.tagName === 'BUTTON')
+    expect(saveButton).toBeTruthy()
+    fireEvent.click(saveButton!)
 
-    expect(startManualProviderOAuth).toHaveBeenCalledWith('nous')
-    expect(disconnectOAuthProvider).not.toHaveBeenCalled()
-  })
-
-  it('does not offer removal for externally managed providers', async () => {
-    listOAuthProviders.mockResolvedValue({
-      providers: [
-        provider('qwen-oauth', true, {
-          cli_command: 'hermes auth add qwen-oauth',
-          disconnect_hint: 'Use `hermes auth add qwen-oauth` or that provider\'s CLI to remove it.',
-          disconnectable: false,
-          flow: 'external',
-          name: 'Qwen (via Qwen CLI)'
-        })
-      ]
-    })
-
-    await renderProvidersSettings()
-
-    expect(await screen.findByText('Qwen Code')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Remove Qwen Code' })).toBeNull()
-    expect(screen.getByText(/managed by its own CLI/)).toBeTruthy()
+    await waitFor(() => expect(setEnvVar).toHaveBeenCalledWith('OPENAI_API_KEY', 'sk-gflab-test'))
   })
 })

@@ -6,10 +6,14 @@ const test = require('node:test')
 
 const {
   apiKeyPresent,
+  classifyStartupMarker,
   hasOnlyApiKeyBlocker,
   readyToLaunch,
+  requiredCoreMissing,
+  runOplMaintenanceStages,
   runOplBootstrap
 } = require('./opl-bootstrap-runner.cjs')
+const { writeOplStartupMarker } = require('./opl-startup-marker.cjs')
 
 function mkTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'opl-bootstrap-test-'))
@@ -20,9 +24,11 @@ function writeFixtureOpl(binDir, payloads) {
   fs.writeFileSync(
     script,
     `#!${process.execPath}
+const fs = require('node:fs')
 const payloads = ${JSON.stringify(payloads)}
 const args = process.argv.slice(2)
 const key = args.join(' ')
+if (payloads.callsFile) fs.appendFileSync(payloads.callsFile, key + '\\n')
 if (key === 'system initialize --json') {
   console.log(JSON.stringify(payloads.initialize.shift()))
   process.exit(0)
@@ -65,6 +71,14 @@ console.log(JSON.stringify({ ok: true, fixture: 'codex-cli' }))
   fs.chmodSync(script, 0o755)
 }
 
+function readCalls(filePath) {
+  try {
+    return fs.readFileSync(filePath, 'utf8').trim().split(/\n/).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
 function initializePayload({ ready = true, apiKey = true, blockers = [] } = {}) {
   return {
     system_initialize: {
@@ -97,9 +111,36 @@ test('initialize helpers read OPL first-run truth fields', () => {
   assert.equal(hasOnlyApiKeyBlocker(payload), true)
 })
 
+test('startup marker classifier requires current marker schema and present core paths', () => {
+  const home = mkTmpHome()
+  const markerPath = path.join(home, 'marker.json')
+  const coreFile = path.join(home, 'core.txt')
+  try {
+    assert.deepEqual(requiredCoreMissing([coreFile]), [coreFile])
+    assert.equal(classifyStartupMarker({ markerPath, requiredCorePaths: [coreFile] }).reason, 'missing')
+
+    writeOplStartupMarker(markerPath, { api_key_present: true })
+    assert.equal(classifyStartupMarker({ markerPath, requiredCorePaths: [coreFile] }).reason, 'core_missing')
+
+    fs.writeFileSync(coreFile, 'ok')
+    const current = classifyStartupMarker({ markerPath, requiredCorePaths: [coreFile] })
+    assert.equal(current.needsInitialize, false)
+    assert.equal(current.reason, 'marker_current')
+
+    fs.writeFileSync(
+      markerPath,
+      JSON.stringify({ kind: 'opl-hermes-candidate-startup', schemaVersion: 0, completedAt: new Date().toISOString() })
+    )
+    assert.equal(classifyStartupMarker({ markerPath, requiredCorePaths: [coreFile] }).reason, 'schema_version_mismatch')
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('runOplBootstrap calls OPL initialize and does not require Hermes installer state', async () => {
   const home = mkTmpHome()
   const bin = path.join(home, 'bin')
+  const markerPath = path.join(home, 'userData', 'opl-startup-marker.json')
   fs.mkdirSync(bin, { recursive: true })
   writeFixtureOpl(bin, { initialize: [initializePayload()] })
   writeFixtureCodex(bin)
@@ -110,12 +151,15 @@ test('runOplBootstrap calls OPL initialize and does not require Hermes installer
       cwd: home,
       env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH || ''}` },
       logRoot: path.join(home, 'logs'),
+      markerPath,
       onEvent: ev => events.push(ev)
     })
 
     assert.equal(result.ok, true)
+    assert.equal(result.startupMode, 'initialized')
     assert.equal(result.needsApiKey, false)
     assert.equal(result.maintenanceDeferred, true)
+    assert.equal(JSON.parse(fs.readFileSync(markerPath, 'utf8')).kind, 'opl-hermes-candidate-startup')
     const manifest = events.find(ev => ev.type === 'manifest')
     assert.ok(manifest)
     assert.deepEqual(
@@ -126,7 +170,6 @@ test('runOplBootstrap calls OPL initialize and does not require Hermes installer
         ['opl-initialize', 'Read One Person Lab status'],
         ['opl-core-setup', 'Prepare One Person Lab core components'],
         ['opl-post-setup-check', 'Verify One Person Lab setup'],
-        ['opl-model-access', 'Check model access'],
         ['opl-codex-adapter', 'Prepare Codex desktop adapter'],
         ['opl-maintenance-schedule', 'Schedule background maintenance']
       ]
@@ -136,11 +179,147 @@ test('runOplBootstrap calls OPL initialize and does not require Hermes installer
     assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-initialize' && ev.state === 'succeeded'))
     assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-core-setup' && ev.state === 'skipped'))
     assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-post-setup-check' && ev.state === 'skipped'))
-    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-model-access' && ev.state === 'succeeded'))
+    assert.equal(events.some(ev => ev.type === 'stage' && ev.name === 'opl-model-access'), false)
     assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-codex-adapter' && ev.state === 'succeeded'))
     assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-maintenance-schedule' && ev.state === 'succeeded'))
     assert.equal(events.some(ev => ev.type === 'stage' && ev.name === 'opl-startup-maintenance'), false)
     assert.equal(events.some(ev => /install\.sh|install\.ps1|Hermes Agent/.test(JSON.stringify(ev))), false)
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('runOplBootstrap uses lightweight startup when OPL marker is current', async () => {
+  const home = mkTmpHome()
+  const bin = path.join(home, 'bin')
+  const markerPath = path.join(home, 'userData', 'opl-startup-marker.json')
+  const callsFile = path.join(home, 'calls.log')
+  fs.mkdirSync(bin, { recursive: true })
+  writeFixtureOpl(bin, { initialize: [initializePayload()], callsFile })
+  writeFixtureCodex(bin)
+  writeOplStartupMarker(markerPath, { api_key_present: true })
+
+  const events = []
+  try {
+    const result = await runOplBootstrap({
+      cwd: home,
+      env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH || ''}` },
+      logRoot: path.join(home, 'logs'),
+      markerPath,
+      onEvent: ev => events.push(ev)
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.startupMode, 'lightweight')
+    assert.equal(result.initialize, null)
+    assert.equal(result.needsApiKey, false)
+    assert.deepEqual(readCalls(callsFile), [])
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-cli-check' && ev.state === 'succeeded'))
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'codex-cli-check' && ev.state === 'succeeded'))
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-initialize' && ev.state === 'skipped'))
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-core-setup' && ev.state === 'skipped'))
+    assert.equal(events.some(ev => ev.type === 'stage' && ev.name === 'opl-model-access'), false)
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-codex-adapter' && ev.state === 'succeeded'))
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('runOplBootstrap routes current-marker missing key to model access without full initialize', async () => {
+  const home = mkTmpHome()
+  const bin = path.join(home, 'bin')
+  const markerPath = path.join(home, 'userData', 'opl-startup-marker.json')
+  const callsFile = path.join(home, 'calls.log')
+  fs.mkdirSync(bin, { recursive: true })
+  writeFixtureOpl(bin, { initialize: [initializePayload({ apiKey: false, blockers: ['codex_config'] })], callsFile })
+  writeFixtureCodex(bin)
+  writeOplStartupMarker(markerPath, { api_key_present: false })
+
+  const events = []
+  try {
+    const result = await runOplBootstrap({
+      cwd: home,
+      env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH || ''}` },
+      logRoot: path.join(home, 'logs'),
+      markerPath,
+      onEvent: ev => events.push(ev)
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.startupMode, 'lightweight')
+    assert.equal(result.initialize, null)
+    assert.equal(result.needsApiKey, true)
+    assert.deepEqual(readCalls(callsFile), [])
+    assert.equal(events.some(ev => ev.type === 'stage' && ev.name === 'opl-model-access'), false)
+    assert.ok(events.some(ev => ev.type === 'route' && ev.route === 'model-access' && ev.needsApiKey === true))
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('runOplMaintenanceStages performs full status refresh in the background path', async () => {
+  const home = mkTmpHome()
+  const bin = path.join(home, 'bin')
+  const callsFile = path.join(home, 'calls.log')
+  fs.mkdirSync(bin, { recursive: true })
+  writeFixtureOpl(bin, {
+    initialize: [initializePayload()],
+    startupMaintenance: { ok: true },
+    reconcileModules: { ok: true },
+    callsFile
+  })
+
+  const events = []
+  try {
+    const result = await runOplMaintenanceStages({
+      cwd: home,
+      env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH || ''}` },
+      emit: ev => events.push(ev),
+      emitOutput: false
+    })
+
+    assert.equal(result.ok, true)
+    assert.deepEqual(readCalls(callsFile), [
+      'system initialize --json',
+      'system startup-maintenance --json',
+      'system reconcile-modules --json'
+    ])
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-background-status-refresh' && ev.state === 'succeeded'))
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-startup-maintenance' && ev.state === 'succeeded'))
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-reconcile-modules' && ev.state === 'succeeded'))
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('runOplBootstrap reruns one-time initialization when required core is missing', async () => {
+  const home = mkTmpHome()
+  const bin = path.join(home, 'bin')
+  const markerPath = path.join(home, 'userData', 'opl-startup-marker.json')
+  const callsFile = path.join(home, 'calls.log')
+  const missingCore = path.join(home, 'missing-core')
+  fs.mkdirSync(bin, { recursive: true })
+  writeFixtureOpl(bin, { initialize: [initializePayload()], callsFile })
+  writeFixtureCodex(bin)
+  writeOplStartupMarker(markerPath, { api_key_present: true })
+
+  const events = []
+  try {
+    const result = await runOplBootstrap({
+      cwd: home,
+      env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH || ''}` },
+      logRoot: path.join(home, 'logs'),
+      markerPath,
+      requiredCorePaths: [{ path: missingCore, label: 'missing-core' }],
+      onEvent: ev => events.push(ev)
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.startupMode, 'initialized')
+    assert.deepEqual(readCalls(callsFile), ['system initialize --json'])
+    assert.equal(result.marker.marker_reason, 'core_missing')
+    assert.deepEqual(result.marker.missing_core, ['missing-core'])
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-initialize' && ev.state === 'succeeded'))
   } finally {
     fs.rmSync(home, { recursive: true, force: true })
   }
@@ -170,7 +349,7 @@ test('runOplBootstrap does not block first launch on maintenance when gflabtoken
     assert.equal(result.needsApiKey, false)
     assert.equal(result.maintenanceDeferred, true)
     assert.equal(events.some(ev => ev.name === 'opl-startup-maintenance'), false)
-    assert.ok(events.some(ev => ev.name === 'opl-model-access' && ev.state === 'succeeded'))
+    assert.equal(events.some(ev => ev.name === 'opl-model-access'), false)
     assert.ok(events.some(ev => ev.type === 'complete' && ev.marker?.maintenance_deferred === true))
   } finally {
     fs.rmSync(home, { recursive: true, force: true })
@@ -195,7 +374,8 @@ test('runOplBootstrap leaves API key entry to onboarding when gflabtoken is miss
 
     assert.equal(result.ok, true)
     assert.equal(result.needsApiKey, true)
-    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-model-access' && ev.state === 'skipped'))
+    assert.equal(events.some(ev => ev.type === 'stage' && ev.name === 'opl-model-access'), false)
+    assert.ok(events.some(ev => ev.type === 'route' && ev.route === 'model-access' && ev.needsApiKey === true))
     assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-maintenance-schedule' && ev.state === 'skipped'))
   } finally {
     fs.rmSync(home, { recursive: true, force: true })

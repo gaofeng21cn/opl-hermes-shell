@@ -21,7 +21,7 @@ Codex App 换壳体验的 GUI 路线。
 [`docs/opl-hermes-upstream-strategy.md`](docs/opl-hermes-upstream-strategy.md)。
 简要说，本仓必须把官方 Hermes Desktop 当成明确参考系：升级时先对照 upstream，
 再重放最小 OPL delta。OPL 定制默认先保证官方 Hermes Desktop 的 UI、设置、skills、
-toolsets、MCP、profiles、cron、文件/预览和 first-launch bootstrap 继续可用；然后
+toolsets、MCP、profiles、cron、文件/预览和官方 baseline 能力继续可用；然后
 把 Codex/OPL/MAS 作为执行器或 agent route 扩展接入。不能把最小 Codex shim 当成
 完整 Hermes backend 替换，也不是把 AionUI/AGUI 稳定线能力闭着眼睛搬过来。
 
@@ -48,6 +48,12 @@ OPL_APP_SHELL_ADAPTER_CONTRACT=contracts/shell-adapters/hermes-codex.json npm ru
   `hermes dashboard` 启动前，用 Hermes 自己的 `hermes_cli.config.load_config/save_config`
   只补缺省值：`model.openai_runtime=codex_app_server`、`display.language=zh` 和本机
   已存在的 MAS/MAG/RCA skill external dirs。已有用户配置不被覆盖。
+- OPL startup fallback：当候选包没有可用 Hermes runtime、需要走 OPL fallback 时，
+  启动语义按 App repo 的四线模型执行：热启动只做 marker、CLI、模型访问和 adapter
+  轻量检查；marker 缺失、过旧或核心组件缺失才进入一次性本机初始化 checklist；
+  缺 key 进入单独模型访问向导；`opl system initialize --json`、startup maintenance、
+  module reconcile 和 OPL 状态刷新必须在主界面可见后后台执行，不能成为每次启动
+  首页的阻塞 gate。
 - executor bridge reference：`electron/opl-codex-gateway.cjs` 只保留为实验 bridge
   和测试材料，明确 `replacesHermesBackend=false`。Codex CLI、OPL app state/action
   和 MAS/MAG/RCA 不得再用这个最小 shim 全量接管 `/api/*` 和 WebSocket backend。

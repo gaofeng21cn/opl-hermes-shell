@@ -27,6 +27,7 @@ const { execFileSync, spawn } = require('node:child_process')
 const { detectRemoteDisplay, isWindowsBinaryPathInWsl, isWslEnvironment } = require('./bootstrap-platform.cjs')
 const { runBootstrap } = require('./bootstrap-runner.cjs')
 const { runOplBootstrap, runOplMaintenanceStages } = require('./opl-bootstrap-runner.cjs')
+const { removeOplStartupMarker } = require('./opl-startup-marker.cjs')
 const { createOplCodexGateway } = require('./opl-codex-gateway.cjs')
 const {
   buildSessionWindowUrl,
@@ -307,6 +308,7 @@ const BOOTSTRAP_MARKER_SCHEMA_VERSION = 1
 
 const DESKTOP_CONNECTION_CONFIG_PATH = path.join(app.getPath('userData'), 'connection.json')
 const DESKTOP_UPDATE_CONFIG_PATH = path.join(app.getPath('userData'), 'updates.json')
+const OPL_STARTUP_MARKER_PATH = path.join(app.getPath('userData'), 'opl-startup-marker.json')
 // active-profile.json records which Hermes profile the desktop launches its
 // local backend as. When set, startHermes() passes `hermes --profile <name>
 // dashboard …`, which deterministically pins HERMES_HOME (see
@@ -2510,6 +2512,7 @@ async function ensureRuntime(backend) {
       cwd: resolveHermesCwd(),
       env: process.env,
       logRoot: path.join(HERMES_HOME, 'logs'),
+      markerPath: OPL_STARTUP_MARKER_PATH,
       abortSignal: bootstrapAbortController.signal,
       onEvent: ev => {
         try {
@@ -2551,7 +2554,7 @@ async function ensureRuntime(backend) {
       bootstrap: false,
       oplCodexGateway: true,
       oplInitialize: result.initialize || null,
-      needsApiKey: Boolean(result.needsApiKey)
+      oplBootstrap: result
     }
   }
 
@@ -5040,7 +5043,8 @@ async function startHermes() {
       if (!oplGateway) {
         oplGateway = createOplCodexGateway({
           rememberLog,
-          initialInitialize: backend.oplInitialize || null
+          initialInitialize: backend.oplInitialize || null,
+          initialSetup: backend.oplBootstrap
         })
       }
       const descriptor = await oplGateway.start()
@@ -5526,6 +5530,7 @@ ipcMain.handle('hermes:bootstrap:repair', async () => {
     if (fileExists(BOOTSTRAP_COMPLETE_MARKER)) {
       fs.rmSync(BOOTSTRAP_COMPLETE_MARKER, { force: true })
     }
+    removeOplStartupMarker(OPL_STARTUP_MARKER_PATH)
   } catch (error) {
     rememberLog(`[bootstrap] failed to remove marker during repair: ${error.message}`)
   }

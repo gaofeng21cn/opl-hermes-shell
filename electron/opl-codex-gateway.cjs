@@ -487,6 +487,7 @@ const BRIDGE_REST_ROUTES = [
   { method: 'GET', path: '/api/model/options' },
   { method: 'GET', path: '/api/model/info' },
   { method: 'POST', path: '/api/model/set' },
+  { method: 'GET', path: '/api/model/auxiliary' },
   { method: 'GET', path: '/api/model/recommended-default' }
 ]
 
@@ -968,6 +969,7 @@ function createOplCodexGateway({
   initializeReader = null,
   configureCodex = null,
   initialInitialize = null,
+  initialSetup = null,
   appServerClient = null,
   codexExecutable = null
 } = {}) {
@@ -977,6 +979,7 @@ function createOplCodexGateway({
   let server = null
   let port = 0
   let cachedInitialize = initialInitialize
+  let cachedSetup = initialSetup
   let configuredModel = {
     provider: 'gflab',
     model: 'gpt-5.5',
@@ -1039,6 +1042,24 @@ function createOplCodexGateway({
 
   async function setupSnapshot() {
     try {
+      if (!cachedInitialize && cachedSetup) {
+        const providerConfigured = cachedSetup.needsApiKey === false
+        return {
+          ok: providerConfigured,
+          ready: providerConfigured,
+          launch_ready: true,
+          provider_configured: providerConfigured,
+          provider: 'gflab',
+          model: configuredModel.model,
+          reasoning_effort: configuredModel.reasoning_effort,
+          base_url: configuredModel.base_url,
+          config_path: null,
+          startup_mode: cachedSetup.startupMode || null,
+          message: providerConfigured
+            ? 'OPL Codex model access is configured.'
+            : 'Paste an API key to configure OPL Codex model access.'
+        }
+      }
       const initialize = await readInitialize()
       const system = getSystemInitialize(initialize)
       const codex = system?.core_engines?.codex || {}
@@ -1082,26 +1103,59 @@ function createOplCodexGateway({
     }
   }
 
+  function markModelAccessConfigured() {
+    cachedInitialize = null
+    cachedSetup = {
+      ...(cachedSetup || {}),
+      needsApiKey: false,
+      startupMode: cachedSetup?.startupMode || 'configured'
+    }
+  }
+
   function modelOptions() {
+    const model = configuredModel.model || 'gpt-5.5'
+
     return {
-      model: configuredModel.model,
+      model,
       provider: configuredModel.provider,
       providers: [
         {
-          name: 'OPL Model Access',
+          name: 'One Person Lab model access',
           slug: 'gflab',
           authenticated: true,
           is_current: true,
           auth_type: 'api_key',
           key_env: 'OPENAI_API_KEY',
-          models: ['gpt-5.5', 'auto'],
-          total_models: 2,
+          models: [model],
+          total_models: 1,
           capabilities: {
-            'gpt-5.5': { fast: false, reasoning: true },
-            auto: { fast: false, reasoning: true }
+            [model]: { fast: false, reasoning: true }
           }
         }
       ]
+    }
+  }
+
+  function auxiliaryModels() {
+    const tasks = [
+      'vision',
+      'web_extract',
+      'compression',
+      'skills_hub',
+      'approval',
+      'mcp',
+      'title_generation',
+      'curator'
+    ].map(task => ({
+      task,
+      provider: 'auto',
+      model: '',
+      base_url: ''
+    }))
+
+    return {
+      main: { model: configuredModel.model, provider: configuredModel.provider },
+      tasks
     }
   }
 
@@ -1228,7 +1282,7 @@ function createOplCodexGateway({
       providers: {
         gflab: {
           base_url: configuredModel.base_url,
-          models: ['gpt-5.5', 'auto']
+          models: [configuredModel.model]
         }
       }
     }
@@ -1238,7 +1292,7 @@ function createOplCodexGateway({
     merged.providers = {
       gflab: {
         base_url: configuredModel.base_url,
-        models: ['gpt-5.5', 'auto']
+        models: [configuredModel.model]
       }
     }
     merged.agent = {
@@ -1391,7 +1445,8 @@ function createOplCodexGateway({
     const text = String(value || '').trim()
     if (!text) return null
     const providerMatch = text.match(/\s+--provider\s+(\S+)/)
-    const model = text.replace(/\s+--provider\s+\S+.*$/, '').trim()
+    const rawModel = text.replace(/\s+--provider\s+\S+.*$/, '').trim()
+    const model = rawModel && rawModel !== 'auto' ? rawModel : configuredModel.model
     return {
       model: model || configuredModel.model,
       provider: providerMatch?.[1] || configuredModel.provider
@@ -1500,7 +1555,7 @@ function createOplCodexGateway({
     }
     if (typeof configureCodex === 'function') {
       const result = await configureCodex(trimmed)
-      cachedInitialize = null
+      markModelAccessConfigured()
       return result
     }
     const result = await runCommand('opl', ['system', 'configure-codex', '--api-key-stdin', '--json'], {
@@ -1518,7 +1573,7 @@ function createOplCodexGateway({
       throw new Error(error)
     }
     startMaintenanceInBackground()
-    cachedInitialize = null
+    markModelAccessConfigured()
     return JSON.parse(result.stdout || '{}')
   }
 
@@ -1608,7 +1663,7 @@ function createOplCodexGateway({
       if (typeof config?.agent?.reasoning_effort === 'string') {
         configuredModel = { ...configuredModel, reasoning_effort: config.agent.reasoning_effort }
       }
-      if (typeof config?.model === 'string') {
+      if (typeof config?.model === 'string' && config.model !== 'auto') {
         configuredModel = { ...configuredModel, model: config.model }
       }
       if (typeof config?.provider === 'string') {
@@ -1659,20 +1714,10 @@ function createOplCodexGateway({
         OPENAI_API_KEY: {
           advanced: false,
           category: 'provider',
-          description: 'OpenAI-compatible model access key used by the One Person Lab Codex app-server adapter.',
+          description: 'gflabtoken API key used by One Person Lab model access.',
           is_password: true,
           is_set: Boolean(setup.provider_configured),
           redacted_value: setup.provider_configured ? '••••••••' : null,
-          tools: ['codex'],
-          url: 'https://platform.openai.com/api-keys'
-        },
-        OPENAI_BASE_URL: {
-          advanced: true,
-          category: 'provider',
-          description: 'OpenAI-compatible base URL used by configured One Person Lab model access.',
-          is_password: false,
-          is_set: Boolean(configuredModel.base_url),
-          redacted_value: configuredModel.base_url || null,
           tools: ['codex'],
           url: null
         }
@@ -1686,13 +1731,11 @@ function createOplCodexGateway({
     if (pathname === '/api/env') {
       try {
         const body = await readBody(request)
-        if (body?.key === 'OPENAI_BASE_URL') {
-          configuredModel = { ...configuredModel, base_url: String(body.value || '').trim() || configuredModel.base_url }
-          json(response, 200, { ok: true })
-          return
-        }
         if (body?.key !== 'OPENAI_API_KEY') {
-          json(response, 400, { ok: false, message: 'OPL candidate only accepts the OpenAI-compatible model access API key.' })
+          json(response, 400, {
+            ok: false,
+            message: 'One Person Lab only accepts the gflabtoken API key for model access.'
+          })
           return
         }
         await configureGflabtoken(body.value)
@@ -1743,12 +1786,30 @@ function createOplCodexGateway({
     }
     if (pathname === '/api/model/set') {
       const body = await readBody(request).catch(() => ({}))
+      if (body.scope === 'auxiliary') {
+        json(response, 200, {
+          ok: true,
+          scope: 'auxiliary',
+          reset: body.task === '__reset__',
+          tasks:
+            body.task === '__reset__'
+              ? auxiliaryModels().tasks.map(task => task.task)
+              : [String(body.task || '')].filter(Boolean),
+          provider: configuredModel.provider,
+          model: configuredModel.model
+        })
+        return
+      }
       configuredModel = {
         ...configuredModel,
         provider: String(body.provider || configuredModel.provider),
-        model: String(body.model || configuredModel.model)
+        model: body.model && body.model !== 'auto' ? String(body.model) : configuredModel.model
       }
       json(response, 200, { ...configuredModel, gateway_tools: [] })
+      return
+    }
+    if (pathname === '/api/model/auxiliary') {
+      json(response, 200, auxiliaryModels())
       return
     }
     if (pathname === '/api/model/recommended-default') {

@@ -142,7 +142,13 @@ test('OPL Codex gateway returns renderer-safe startup REST shapes', async () => 
     assert.equal(Array.isArray(models.providers), true)
     assert.equal(models.providers[0].slug, 'gflab')
     assert.equal(models.providers[0].key_env, 'OPENAI_API_KEY')
-    assert.equal(Array.isArray(models.providers[0].models), true)
+    assert.equal(models.providers[0].name, 'One Person Lab model access')
+    assert.deepEqual(models.providers[0].models, ['gpt-5.5'])
+    assert.equal(models.providers[0].models.includes('auto'), false)
+
+    const auxiliary = await getJson(descriptor.baseUrl, '/api/model/auxiliary')
+    assert.equal(auxiliary.main.model, 'gpt-5.5')
+    assert.equal(auxiliary.tasks.find(task => task.task === 'vision')?.provider, 'auto')
 
     const oauthProviders = await getJson(descriptor.baseUrl, '/api/providers/oauth')
     assert.deepEqual(oauthProviders, { providers: [] })
@@ -179,6 +185,25 @@ test('OPL Codex gateway reports missing model access key as onboarding-needed', 
   )
 })
 
+test('OPL Codex gateway can answer setup status from lightweight bootstrap state', async () => {
+  await withGateway(
+    async descriptor => {
+      const status = await getJson(descriptor.baseUrl, '/api/status')
+      assert.equal(status.provider_configured, false)
+      const setup = await requestRpc(descriptor.wsUrl, 'setup.status')
+      assert.equal(setup.provider_configured, false)
+      assert.equal(setup.startup_mode, 'lightweight')
+    },
+    {
+      initialInitialize: null,
+      initialSetup: { needsApiKey: true, startupMode: 'lightweight' },
+      initializeReader: async () => {
+        throw new Error('setup.status should not call full initialize during lightweight startup')
+      }
+    }
+  )
+})
+
 test('OPL Codex gateway saves gflabtoken key through OPL configure-codex', async () => {
   const configured = []
   await withGateway(
@@ -190,6 +215,8 @@ test('OPL Codex gateway saves gflabtoken key through OPL configure-codex', async
       })
       assert.equal(saved.response.status, 200)
       assert.deepEqual(configured, ['sk-gflab-test'])
+      const setup = await requestRpc(descriptor.wsUrl, 'setup.status')
+      assert.equal(setup.provider_configured, true)
     },
     {
       initialInitialize: initializeFixture(false),
@@ -212,6 +239,7 @@ test('OPL Codex gateway scope helper documents executor bridge ownership', () =>
   assert.equal(isOplCodexBridgeRpcMethod('config.set'), true)
   assert.equal(isOplCodexBridgeRpcMethod('commands.catalog'), false)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/model/options'), true)
+  assert.equal(isOplCodexBridgeRestRoute('GET', '/api/model/auxiliary'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/providers/oauth'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/profiles'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/config'), true)
@@ -303,15 +331,23 @@ test('OPL Codex gateway persists Hermes-compatible config edits during the adapt
   })
 })
 
-test('OPL Codex gateway exposes provider env catalog in the categories expected by Hermes settings', async () => {
+test('OPL Codex gateway exposes only the gflabtoken API key in the ordinary model-access catalog', async () => {
   await withGateway(async descriptor => {
     const env = await getJson(descriptor.baseUrl, '/api/env')
 
+    assert.deepEqual(Object.keys(env), ['OPENAI_API_KEY'])
     assert.equal(env.OPENAI_API_KEY.category, 'provider')
+    assert.match(env.OPENAI_API_KEY.description, /gflabtoken/i)
     assert.equal(env.OPENAI_API_KEY.is_password, true)
     assert.equal(env.OPENAI_API_KEY.is_set, true)
-    assert.equal(env.OPENAI_BASE_URL.category, 'provider')
-    assert.equal(env.OPENAI_BASE_URL.advanced, true)
+
+    const rejected = await requestJson(descriptor.baseUrl, '/api/env', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: 'OPENAI_BASE_URL', value: 'https://example.invalid/v1' })
+    })
+    assert.equal(rejected.response.status, 400)
+    assert.match(rejected.body.message, /gflabtoken API key/i)
   })
 })
 
@@ -352,7 +388,13 @@ test('OPL Codex gateway returns renderer-safe config RPC shapes', async () => {
     })
     assert.equal(updated.ok, true)
     assert.equal(updated.provider, 'gflab')
-    assert.equal(updated.model, 'auto')
+    assert.equal(updated.model, 'gpt-5.5')
+
+    const explicit = await requestRpc(descriptor.wsUrl, 'config.set', {
+      key: 'model',
+      value: 'gpt-5.5 --provider gflab --global'
+    })
+    assert.equal(explicit.model, 'gpt-5.5')
   })
 })
 

@@ -74,11 +74,15 @@ function initializePayload(apiKeyPresent) {
 
 function makeFixtureBin(sandbox, apiKeyPresent) {
   const binDir = path.join(sandbox, 'bin')
+  const callsPath = path.join(sandbox, 'opl-calls.log')
   fs.mkdirSync(binDir, { recursive: true })
+  fs.mkdirSync(path.dirname(callsPath), { recursive: true })
   const payload = JSON.stringify(initializePayload(apiKeyPresent))
   writeExecutable(path.join(binDir, 'opl'), `#!/usr/bin/env node
+const fs = require('node:fs')
 const args = process.argv.slice(2)
 const payload = ${JSON.stringify(payload)}
+fs.appendFileSync(${JSON.stringify(callsPath)}, args.join(' ') + '\\n')
 if (args.join(' ') === 'system initialize --json') {
   console.log(payload)
   process.exit(0)
@@ -152,7 +156,7 @@ function handle(request) {
   write({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'unsupported fixture method ' + request.method } })
 }
 `)
-  return binDir
+  return { binDir, callsPath }
 }
 
 async function waitForLog(logPath, predicate) {
@@ -179,16 +183,29 @@ async function getJson(baseUrl, pathname) {
   return response.json()
 }
 
-async function runCase(name, apiKeyPresent) {
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), `opl-hermes-${name}-`))
+function readCalls(callsPath) {
+  try {
+    return fs.readFileSync(callsPath, 'utf8').trim().split(/\n/).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+function stageState(text, stageName) {
+  const matches = text.matchAll(new RegExp(`"name":"${stageName}","state":"([^"]+)"`, 'g'))
+  return Array.from(matches, match => match[1])
+}
+
+async function runLaunch({ apiKeyPresent, name, sandbox, expectBlockingInitialize, expectRouteToModelAccess }) {
   const userData = path.join(sandbox, 'user-data')
-  const hermesHome = path.join(sandbox, 'hermes-home')
+  const hermesHome = path.join(sandbox, `hermes-home-${name}`)
   const workspace = path.join(sandbox, 'workspace')
   fs.mkdirSync(userData, { recursive: true })
   fs.mkdirSync(hermesHome, { recursive: true })
   fs.mkdirSync(workspace, { recursive: true })
-  const binDir = makeFixtureBin(sandbox, apiKeyPresent)
+  const { binDir, callsPath } = makeFixtureBin(path.join(sandbox, `fixture-${name}`), apiKeyPresent)
   const logPath = path.join(hermesHome, 'logs', 'desktop.log')
+  const callsBefore = readCalls(callsPath).length
 
   const env = {
     ...process.env,
@@ -215,8 +232,7 @@ async function runCase(name, apiKeyPresent) {
   try {
     let text = await waitForLog(logPath, log => (
       log.includes('OPL App initialization instead of Hermes Agent install') &&
-      log.includes('OPL Codex adapter is ready. Finalizing desktop startup') &&
-      log.includes('"api_key_present":' + String(apiKeyPresent))
+      log.includes('OPL Codex adapter is ready. Finalizing desktop startup')
     ))
     const port = gatewayPortFromLog(text)
     assert(port, `${name}: gateway port was not logged`)
@@ -230,27 +246,52 @@ async function runCase(name, apiKeyPresent) {
     text = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8') : text
     assert(!/install\.sh|install\.ps1|Hermes Agent installer/i.test(text), `${name}: Hermes installer path leaked into OPL first run`)
     assert(!/unsupported rpc config\.(get|set)/i.test(text), `${name}: renderer-safe config RPC is still unsupported`)
-    for (const stage of [
+    const expectedStages = [
       'opl-cli-check',
       'codex-cli-check',
       'opl-initialize',
       'opl-core-setup',
       'opl-post-setup-check',
-      'opl-model-access',
       'opl-codex-adapter',
       'opl-maintenance-schedule'
-    ]) {
+    ]
+    for (const stage of expectedStages) {
       assert(text.includes(`"name":"${stage}"`) || text.includes(`"stage":"${stage}"`), `${name}: ${stage} did not emit`)
     }
-    assert(text.includes('"stage":"opl-model-access"'), `${name}: model access stage did not emit`)
+    assert(!text.includes('"stage":"opl-model-access"'), `${name}: model access leaked into initialization stages`)
+    const callsAfter = readCalls(callsPath)
+    const newCalls = callsAfter.slice(callsBefore)
+    const adapterReadyIndex = text.indexOf('OPL Codex adapter is ready. Finalizing desktop startup')
+    const initializeStates = stageState(text, 'opl-initialize')
+    if (expectBlockingInitialize) {
+      const initializeStageIndex = text.indexOf('"name":"opl-initialize","state":"running"')
+      assert(initializeStates.includes('running'), `${name}: expected one-time initialize running stage before adapter ready`)
+      assert(
+        adapterReadyIndex < 0 || initializeStageIndex < adapterReadyIndex,
+        `${name}: expected initialize before adapter ready`
+      )
+      assert(newCalls.includes('system initialize --json'), `${name}: initialize command did not run`)
+    } else {
+      assert(
+        initializeStates.every(state => state === 'skipped'),
+        `${name}: full initialize ran before adapter ready, initializeStates=${JSON.stringify(initializeStates)}`
+      )
+      assert(
+        text.includes('"stage":"opl-background-status-refresh"') || newCalls.length === 0,
+        `${name}: expected only background status refresh calls after adapter ready, calls=${JSON.stringify(newCalls)}`
+      )
+    }
     if (apiKeyPresent) {
       assert(text.includes('"maintenance_deferred":true'), `${name}: configured first run did not defer maintenance`)
       assert(!text.includes('API key entry continues in the model access screen'), `${name}: configured first run still routed to API key entry`)
     } else {
-      assert(text.includes('API key entry continues in the model access screen'), `${name}: missing key did not route to model access entry`)
+      assert(
+        text.includes('API key entry continues in the model access screen') === expectRouteToModelAccess,
+        `${name}: missing key route expectation mismatch`
+      )
       assert(text.includes('"needsApiKey":true') || text.includes('"api_key_present":false'), `${name}: missing-key state was not visible`)
     }
-    return { logPath, sandbox }
+    return { calls: newCalls, logPath, sandbox }
   } finally {
     try {
       child.kill('SIGTERM')
@@ -276,14 +317,44 @@ async function main() {
   assert(process.platform === 'darwin', 'packaged OPL first-run smoke is currently macOS-only')
   assert(binary && fs.existsSync(binary), `missing packaged executable: ${binary}`)
 
-  const missing = await runCase('missing-key', false)
-  const configured = await runCase('configured-key', true)
+  const missingSandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-missing-key-'))
+  const configuredSandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-configured-key-'))
+  const missing = await runLaunch({
+    apiKeyPresent: false,
+    expectBlockingInitialize: true,
+    expectRouteToModelAccess: true,
+    name: 'missing-key-first-run',
+    sandbox: missingSandbox
+  })
+  const missingHot = await runLaunch({
+    apiKeyPresent: false,
+    expectBlockingInitialize: false,
+    expectRouteToModelAccess: true,
+    name: 'missing-key-hot-launch',
+    sandbox: missingSandbox
+  })
+  const configured = await runLaunch({
+    apiKeyPresent: true,
+    expectBlockingInitialize: true,
+    expectRouteToModelAccess: false,
+    name: 'configured-key-first-run',
+    sandbox: configuredSandbox
+  })
+  const configuredHot = await runLaunch({
+    apiKeyPresent: true,
+    expectBlockingInitialize: false,
+    expectRouteToModelAccess: false,
+    name: 'configured-key-hot-launch',
+    sandbox: configuredSandbox
+  })
 
   console.log(JSON.stringify({
     status: 'opl_hermes_packaged_first_run_smoke_passed',
     cases: {
       missing_key: missing,
-      configured_key: configured
+      missing_key_hot_launch: missingHot,
+      configured_key: configured,
+      configured_key_hot_launch: configuredHot
     }
   }, null, 2))
 }

@@ -39,11 +39,11 @@ describe('desktop i18n runtime translator', () => {
   it('translates settings copy for newly supported locales', () => {
     setRuntimeI18nLocale('ja')
     expect(translateNow('settings.appearance.title')).toBe('外観')
-    expect(translateNow('settings.nav.providers')).toBe('プロバイダー')
+    expect(translateNow('settings.nav.providers')).toBe('モデルアクセス')
 
     setRuntimeI18nLocale('zh-hant')
     expect(translateNow('settings.appearance.title')).toBe('外觀')
-    expect(translateNow('settings.nav.providerApiKeys')).toBe('API 金鑰')
+    expect(translateNow('settings.nav.providerApiKeys')).toBe('模型存取')
   })
 
   it('keeps translated settings field copy addressable from schema keys', () => {

@@ -180,10 +180,10 @@ export const ja = defineLocale({
     exportFailed: '書き出しに失敗しました',
     resetFailed: 'リセットに失敗しました',
     nav: {
-      providers: 'プロバイダー',
-      providerAccounts: 'アカウント',
-      providerApiKeys: 'API キー',
-      gateway: 'ゲートウェイ',
+      providers: 'モデルアクセス',
+      providerAccounts: 'モデルアクセス',
+      providerApiKeys: 'モデルアクセス',
+      gateway: '接続診断',
       apiKeys: 'ツールとキー',
       keysTools: 'ツール',
       keysSettings: '設定',
@@ -232,7 +232,7 @@ export const ja = defineLocale({
       completionSoundPreview: '試聴'
     },
     sections: {
-      model: 'モデル',
+      model: 'モデル戦略',
       chat: 'チャット',
       appearance: '外観',
       workspace: 'ワークスペース',
@@ -242,10 +242,10 @@ export const ja = defineLocale({
       advanced: '詳細'
     },
     searchPlaceholder: {
-      about: 'Hermes Desktop について',
+      about: 'One Person Lab について',
       config: '設定を検索…',
-      gateway: 'ゲートウェイ接続…',
-      keys: 'API キーを検索…',
+      gateway: '接続診断…',
+      keys: 'キーを検索…',
       mcp: 'MCP サーバーを検索…',
       sessions: 'アーカイブ済みセッションを検索…'
     },
@@ -660,19 +660,19 @@ export const ja = defineLocale({
       saveServer: 'サーバーを保存'
     },
     model: {
-      loading: 'モデル設定を読み込み中...',
+      loading: 'モデル戦略を読み込み中...',
       appliesDesc:
-        '新しいセッションに適用されます。コンポーザーのモデルピッカーを使ってアクティブなチャットをホットスワップできます。',
-      provider: 'プロバイダー',
-      model: 'モデル',
+        'One Person Lab / Codex の現在の推奨モデルに自動追従します。コンポーザーには現在のチャットで有効なモデルが表示されます。',
+      provider: 'モデルアクセス',
+      model: '現在のモデル',
       applying: '適用中...',
-      auxiliaryTitle: '補助モデル',
-      resetAllToMain: 'すべてメインにリセット',
+      auxiliaryTitle: 'タスクモデル戦略',
+      resetAllToMain: 'すべてメインモデルに追従',
       auxiliaryDesc:
-        'ヘルパータスクはデフォルトでメインモデルで実行されます。タスクに専用モデルを割り当てることでオーバーライドできます。',
+        '現在の OPL 候補版では、ビジョン、Web 抽出、圧縮、スキルハブ、承認、MCP、タイトル生成はすべてメインモデルに追従し、個別のモデルスロットは公開しません。',
       setToMain: 'メインに設定',
-      change: '変更',
-      autoUseMain: '自動 · メインモデルを使用',
+      change: '表示',
+      autoUseMain: '自動 · メインモデルに追従',
       providerDefault: '(プロバイダーのデフォルト)',
       tasks: {
         vision: { label: 'ビジョン', hint: '画像分析' },
@@ -686,10 +686,10 @@ export const ja = defineLocale({
       }
     },
     providers: {
-      connectAccount: 'アカウントを接続',
-      haveApiKey: 'API キーをお持ちですか？',
+      connectAccount: 'モデルアクセス',
+      haveApiKey: 'API key を設定',
       intro:
-        'サブスクリプションでサインインします。API キーのコピーは不要です。Hermes がアプリ内でブラウザーサインインを代行します。',
+        'One Person Lab では gflabtoken API key のみを設定します。他の互換プロバイダー、OAuth アカウント、カスタム Base URL は通常パスでは公開しません。',
       connected: '接続済み',
       collapse: '折りたたむ',
       connectAnother: '別のプロバイダーを接続',
@@ -699,8 +699,8 @@ export const ja = defineLocale({
       removedTitle: 'アカウントを削除しました',
       removedMessage: provider => `${provider} を削除しました。`,
       failedRemove: provider => `${provider} を削除できませんでした`,
-      noProviderKeys: '利用可能なプロバイダー API キーがありません。',
-      loading: 'プロバイダーを読み込み中...'
+      noProviderKeys: '設定可能なモデルアクセスキーがありません。',
+      loading: 'モデルアクセス設定を読み込み中...'
     },
     sessions: {
       loading: 'アーカイブ済みセッションを読み込み中…',

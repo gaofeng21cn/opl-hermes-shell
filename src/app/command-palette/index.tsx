@@ -137,8 +137,7 @@ type NonConfigSettingsLabel =
   | 'keysSettings'
   | 'keysTools'
   | 'mcp'
-  | 'providerAccounts'
-  | 'providerApiKeys'
+  | 'providers'
 
 const NON_CONFIG_SETTINGS: ReadonlyArray<{
   icon: IconComponent
@@ -148,15 +147,9 @@ const NON_CONFIG_SETTINGS: ReadonlyArray<{
 }> = [
   {
     icon: Zap,
-    keywords: ['accounts', 'sign in', 'oauth', 'login', 'subscription', 'models', 'anthropic', 'openai'],
-    labelKey: 'providerAccounts',
-    tab: 'providers&pview=accounts'
-  },
-  {
-    icon: KeyRound,
-    keywords: ['providers', 'api key', 'keys', 'secrets', 'tokens'],
-    labelKey: 'providerApiKeys',
-    tab: 'providers&pview=keys'
+    keywords: ['model access', 'gflabtoken', 'api key', 'codex', 'models'],
+    labelKey: 'providers',
+    tab: 'providers'
   },
   { icon: Globe, keywords: ['connection', 'messaging'], labelKey: 'gateway', tab: 'gateway' },
   {

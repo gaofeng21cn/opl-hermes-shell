@@ -97,6 +97,12 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   只补缺省值：`model.openai_runtime=codex_app_server`、`display.language=zh` 和
   本机已存在的 MAS/MAG/RCA skill external dirs。已有用户配置不被覆盖，seed 失败
   只写日志，不阻断官方 Hermes Desktop 启动。
+- **OPL startup fallback**：没有可用 Hermes runtime 且进入 OPL fallback 时，按
+  App repo 的四线模型分流。每次启动只做 marker、One Person Lab CLI、Codex CLI、
+  gflabtoken 模型访问和 Codex adapter startup 的轻量检查；marker 缺失、过旧或核心
+  组件缺失时才复用 Hermes checklist UI 做一次性本机初始化；缺 key 进入单独模型访问
+  向导；`opl system initialize --json`、startup maintenance、module reconcile 和
+  OPL 状态刷新在主界面可见后后台执行，不得成为热启动首页 gate。
 - **Codex/OPL/MAS 扩展点**：优先使用 Hermes 原生 `openai-codex`、
   `model.openai_runtime=codex_app_server` 和 `skills.external_dirs` 能力。
   在 OPL first-run fallback 路径中，`electron/opl-codex-gateway.cjs` 作为
@@ -129,11 +135,14 @@ Hermes Desktop 官方设置页导航包含 `Model`、`Chat`、`Appearance`、`Wo
   若候选 adapter 的 schema 缺少对应 `SECTIONS.keys` 字段，页面会显示“无可配置项”。
   这是 adapter 数据面过窄导致的假空白，不是中文翻译问题，也不是官方 renderer
   本来没有实现。
-- `Providers` 通过 `/api/providers/oauth` 和 `/api/env` 渲染。Provider API key
-  必须满足 `EnvVarInfo.category === "provider"`，且 env key 能被
-  `PROVIDER_GROUPS` 归入非 `Other` 分组，否则页面会显示没有 provider key。OPL
-  adapter 暴露 `OPENAI_API_KEY` 时必须使用 provider category，并确保 `OPENAI_`
-  有稳定分组。
+- `Providers` 在 OPL 普通路径中收敛为“模型访问”。`/api/env` 只暴露
+  `OPENAI_API_KEY`，UI 分组为 `gflabtoken`，保存时走
+  `opl system configure-codex --api-key-stdin --json`。普通设置页不暴露
+  OpenAI-compatible provider、OAuth provider account、自定义 Base URL 或其它
+  provider key；这类上游 Hermes 能力只能在明确的高级/诊断路径重新评估。
+- `Providers` 通过 `/api/providers/oauth` 和 `/api/env` 渲染。若未来重新开放
+  provider key，仍必须满足 `EnvVarInfo.category === "provider"`，且 env key 能被
+  `PROVIDER_GROUPS` 归入非 `Other` 分组，否则页面会显示没有 provider key。
 - `Tools & Keys` 只显示 `tool`、`setting` 或非 channel-managed `messaging`
   category。若当前候选没有真实工具密钥或网关级设置密钥，显示空态是官方 UI 的正常
   行为；不要为了填满页面伪造无法保存或没有 runtime owner 的密钥。
