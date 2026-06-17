@@ -97,6 +97,8 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   只补缺省值：`model.openai_runtime=codex_app_server`、`display.language=zh` 和
   本机已存在的 MAS/MAG/RCA skill external dirs。已有用户配置不被覆盖，seed 失败
   只写日志，不阻断官方 Hermes Desktop 启动。
+- **OPL i18n 范围**：普通 UI 只维护简体中文和英文。中文系统语言统一映射到 `zh`；
+  日文和其它非支持语言回退英文。不要继续增加繁体中文或日文 locale 文件。
 - **OPL startup fallback**：没有可用 Hermes runtime 且进入 OPL fallback 时，按
   App repo 的四线模型分流。每次启动只做 marker、One Person Lab CLI、Codex CLI、
   gflabtoken 模型访问和 Codex adapter startup 的轻量检查；marker 缺失、过旧或核心

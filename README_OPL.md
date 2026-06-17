@@ -48,6 +48,8 @@ OPL_APP_SHELL_ADAPTER_CONTRACT=contracts/shell-adapters/hermes-codex.json npm ru
   `hermes dashboard` 启动前，用 Hermes 自己的 `hermes_cli.config.load_config/save_config`
   只补缺省值：`model.openai_runtime=codex_app_server`、`display.language=zh` 和本机
   已存在的 MAS/MAG/RCA skill external dirs。已有用户配置不被覆盖。
+- OPL i18n：普通 UI 只维护简体中文和英文。中文系统语言统一进入 `zh`，日文和其它
+  非支持语言回退英文；不要继续增加繁体中文或日文 locale 文件。
 - OPL startup fallback：当候选包没有可用 Hermes runtime、需要走 OPL fallback 时，
   启动语义按 App repo 的四线模型执行：热启动只做 marker、CLI、模型访问和 adapter
   轻量检查；marker 缺失、过旧或核心组件缺失才进入一次性本机初始化 checklist；

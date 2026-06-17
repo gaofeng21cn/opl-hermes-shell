@@ -174,7 +174,7 @@ describe('I18nProvider', () => {
     }
 
     render(
-      <I18nProvider configClient={configClient}>
+      <I18nProvider configClient={configClient} initialLocale="en">
         <LanguageProbe />
       </I18nProvider>
     )
@@ -222,7 +222,7 @@ describe('I18nProvider', () => {
     }
 
     render(
-      <I18nProvider configClient={configClient}>
+      <I18nProvider configClient={configClient} initialLocale="en">
         <LanguageProbe />
       </I18nProvider>
     )
