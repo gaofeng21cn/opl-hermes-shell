@@ -7,6 +7,12 @@ const REASONING_LABELS: Record<string, string> = {
   xhigh: 'Max'
 }
 
+const OPL_AUTO_POLICY_MODELS = new Set(['gpt-5.5'])
+
+export function isAutoModelPolicy(model: string): boolean {
+  return OPL_AUTO_POLICY_MODELS.has(modelBaseId(model).toLowerCase())
+}
+
 export function reasoningEffortLabel(effort: string): string {
   const key = effort.trim().toLowerCase()
 
@@ -120,8 +126,8 @@ export function formatModelStatusLabel(
 
   const suffix = parts.join(' ')
 
-  if (modelBaseId(model) === 'gpt-5.5' && suffix === 'Max') {
-    return `Auto · ${name} ${suffix}`
+  if (isAutoModelPolicy(model)) {
+    return `Auto · ${name} Max`
   }
 
   return `${name} · ${suffix}`

@@ -10,6 +10,37 @@ export interface ConfigSchemaResponse {
   fields: Record<string, ConfigFieldSchema>
 }
 
+export interface OplPurposeRoute {
+  agent_id: string
+  aliases: string[]
+  app_action_id: null | string
+  app_action_payload: null | Record<string, unknown>
+  codex_prompt_contract: string
+  label: string
+  ordinary_golden_path: string
+  owner_surface: string
+  project_id: string
+  purpose_id: string
+  start_surface: string
+  target_domain_id: string
+}
+
+export interface OplPurposeRouteCatalog {
+  authority_boundary: {
+    can_claim_domain_ready: boolean
+    can_create_owner_receipt: boolean
+    can_create_typed_blocker: boolean
+    can_write_domain_truth: boolean
+    creates_second_truth_source: boolean
+    uses_opl_cli_app_action_or_skill_authority: boolean
+  }
+  bridge_mode: string
+  route_owner: string
+  routes: OplPurposeRoute[]
+  shell_role: string
+  surface_kind: string
+}
+
 export interface AudioTranscriptionResponse {
   ok: boolean
   provider?: string

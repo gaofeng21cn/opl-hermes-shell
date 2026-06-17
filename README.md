@@ -83,9 +83,21 @@ npm run pack         # unpacked app under release/ (no installer)
 
 Installers are built and uploaded to GitHub Releases manually. macOS/Windows signing & notarization happen automatically when the relevant credentials are present in the environment (`CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_*` for macOS, `WIN_CSC_*` for Windows).
 
-### How it works
+### How it works in this OPL candidate
 
-The packaged app ships only the Electron shell. On first launch it installs the Hermes Agent runtime into `HERMES_HOME` (`~/.hermes`, or `%LOCALAPPDATA%\hermes` on Windows) — the **same layout a CLI install uses**, so the two are interchangeable. The renderer (React, in `src/`) talks to a `hermes dashboard` backend over the standard gateway APIs and reuses the embedded TUI rather than reimplementing chat. The install, backend-resolution, and self-update logic all live in `electron/main.cjs`.
+This checkout is the One Person Lab Hermes candidate shell. The official Hermes
+Desktop renderer, settings, onboarding, and packaging shape are preserved, but
+the ordinary OPL path does not install Hermes Agent as the chat executor. First
+launch runs the OPL startup split: lightweight checks, one-time local
+initialization only when needed, gflabtoken model access, and deferred OPL
+maintenance. Chat runs through the OPL Codex gateway backed by
+`codex app-server --listen stdio://`.
+
+The packaged candidate app is built by `npm run package` and verified by
+`npm run smoke:opl-first-run`. The smoke launches the real `.app`, checks the
+branded macOS executable, verifies missing-key/configured/hot-launch/fallback
+startup paths, sends a fixture Codex app-server turn, and records MAS route
+receipt evidence under `out/smoke-opl-first-run/summary.json`.
 
 ### Verification
 

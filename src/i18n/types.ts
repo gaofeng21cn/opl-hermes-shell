@@ -213,6 +213,7 @@ export interface Translations {
       apiKeys: string
       keysTools: string
       keysSettings: string
+      agentsCapabilities: string
       mcp: string
       archivedChats: string
       about: string
@@ -302,6 +303,8 @@ export interface Translations {
       loading: string
       emptyTitle: string
       emptyDesc: string
+      emptySectionTitle: (section: string) => string
+      emptySectionDesc: string
       failedLoad: string
       autosaveFailed: string
       imported: string
@@ -463,6 +466,23 @@ export interface Translations {
       failedRemove: (provider: string) => string
       noProviderKeys: string
       loading: string
+    }
+    agentsCapabilities: {
+      loading: string
+      failedLoad: string
+      title: string
+      intro: string
+      emptyTitle: string
+      emptyDesc: string
+      owner: string
+      project: string
+      action: string
+      readback: string
+      authority: string
+      aliases: string
+      routeReady: string
+      routeBoundary: string
+      noDomainTruth: string
     }
     sessions: {
       loading: string

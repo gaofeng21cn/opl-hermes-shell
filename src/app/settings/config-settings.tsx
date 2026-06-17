@@ -282,6 +282,8 @@ export function ConfigSettings({
   }, [schema])
 
   const fields = sectionFields.get(activeSectionId) ?? []
+  const activeSection = SECTIONS.find(section => section.id === activeSectionId)
+  const emptyTitle = activeSection ? c.emptySectionTitle(t.settings.sections[activeSection.id] ?? activeSection.label) : c.emptyTitle
 
   // Deep-link target from the command palette (?field=<key>): scroll the row
   // into view and flash it, then drop the param so it doesn't re-fire.
@@ -351,7 +353,7 @@ export function ConfigSettings({
         </div>
       )}
       {fields.length === 0 ? (
-        <EmptyState description={c.emptyDesc} title={c.emptyTitle} />
+        <EmptyState description={c.emptySectionDesc} title={emptyTitle} />
       ) : (
         <div className="grid gap-1">
           {fields.map(([key, field]) => (

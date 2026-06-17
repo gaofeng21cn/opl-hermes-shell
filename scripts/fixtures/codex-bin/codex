@@ -92,6 +92,15 @@ function handle(request) {
     })
     write({
       jsonrpc: '2.0',
+      method: 'item/toolCall/started',
+      params: {
+        threadId: request.params?.threadId || 'thread-fixture',
+        turnId: 'turn-fixture',
+        item: { id: 'tool-fixture', name: 'fixture_tool' }
+      }
+    })
+    write({
+      jsonrpc: '2.0',
       method: 'turn/completed',
       params: {
         threadId: request.params?.threadId || 'thread-fixture',

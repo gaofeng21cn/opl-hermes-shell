@@ -67,52 +67,17 @@ export interface ApiKeyOption {
 const API_KEY_OPTIONS: ApiKeyOption[] = [
   {
     id: 'gflabtoken',
-    name: 'OPL Model Access',
+    name: 'One Person Lab 模型访问',
     envKey: 'OPENAI_API_KEY',
     docsUrl: '',
-    short: 'OPL model access',
-    description: 'Configure the API key for the default One Person Lab Codex adapter.'
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    envKey: 'OPENROUTER_API_KEY',
-    docsUrl: 'https://openrouter.ai/keys'
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    envKey: 'OPENAI_API_KEY',
-    docsUrl: 'https://platform.openai.com/api-keys'
-  },
-  {
-    id: 'gemini',
-    name: 'Google Gemini',
-    envKey: 'GEMINI_API_KEY',
-    docsUrl: 'https://aistudio.google.com/app/apikey'
-  },
-  {
-    id: 'xai',
-    name: 'xAI Grok',
-    envKey: 'XAI_API_KEY',
-    docsUrl: 'https://console.x.ai/'
-  },
-  {
-    id: 'local',
-    name: 'Local / custom endpoint',
-    envKey: 'OPENAI_BASE_URL',
-    docsUrl: 'https://github.com/NousResearch/hermes-agent#bring-your-own-endpoint',
-    placeholder: 'http://127.0.0.1:8000/v1'
+    short: '默认模型访问',
+    description: '为 One Person Lab 默认 Codex 适配器配置 gflabtoken API key。'
   }
 ]
 
-// Build the FULL API-key provider catalog from the backend model options so the
-// onboarding / Providers key form lists every `api_key` provider `hermes model`
-// knows about — not just the hand-curated five. Curated entries keep their
-// richer copy + placeholders and float to the top (recommended defaults); every
-// other api_key provider is appended with a generic "paste {KEY}" affordance.
-// OAuth / external providers are intentionally excluded here — they go through
-// the OAuth picker / sign-in flow, not a pasted key.
+// OPL ordinary first-run exposes exactly one credential: the gflabtoken API key
+// stored as OPENAI_API_KEY. The gateway may know about other upstream providers,
+// but those are not part of this candidate's normal model-access path.
 function useApiKeyCatalog(): ApiKeyOption[] {
   const [rows, setRows] = useState<ModelOptionProvider[]>([])
 
@@ -139,43 +104,9 @@ function useApiKeyCatalog(): ApiKeyOption[] {
   }, [])
 
   return useMemo(() => {
-    if (rows.some(row => row.slug === 'gflab' || row.key_env === 'OPENAI_API_KEY')) {
-      const gflab = API_KEY_OPTIONS.find(o => o.id === 'gflabtoken')
-      return gflab ? [gflab] : []
-    }
+    void rows
 
-    const curatedByEnv = new Map(API_KEY_OPTIONS.map(o => [o.envKey, o]))
-    const derived: ApiKeyOption[] = []
-    const seenEnv = new Set<string>(API_KEY_OPTIONS.map(o => o.envKey))
-
-    for (const row of rows) {
-      // Only api_key providers can be activated with a pasted key. Skip OAuth /
-      // external / managed flows and anything missing an env var to write to.
-      if (row.auth_type && row.auth_type !== 'api_key') {
-        continue
-      }
-
-      const envKey = row.key_env
-
-      if (!envKey || seenEnv.has(envKey)) {
-        continue
-      }
-
-      seenEnv.add(envKey)
-      derived.push({
-        id: row.slug,
-        name: row.name,
-        envKey,
-        description: `Direct API access to ${row.name}.`,
-        docsUrl: ''
-      })
-    }
-
-    // Curated first (recommended order), then the rest alphabetically so the
-    // long tail is scannable.
-    derived.sort((a, b) => a.name.localeCompare(b.name))
-
-    return [...API_KEY_OPTIONS.filter(o => curatedByEnv.has(o.envKey)), ...derived]
+    return API_KEY_OPTIONS
   }, [rows])
 }
 
@@ -449,16 +380,14 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
   const hasOauth = ordered.length > 0
   const apiKeyOptions = useApiKeyCatalog()
 
-  // localEndpoint forces the key form regardless of `mode` (which a manual
-  // provider refresh may flip back to 'oauth'); it preselects the local option
-  // and hides the "back to sign in" link since the user came specifically to
-  // configure a custom endpoint.
+  // The OPL candidate keeps Hermes' onboarding module but not its provider
+  // marketplace. Even if an old local-endpoint trigger reaches this overlay,
+  // ordinary setup still configures the single gflabtoken API key.
   if (localEndpoint || mode === 'apikey' || !hasOauth) {
     return (
       <div className="grid gap-3">
         <ApiKeyForm
           canGoBack={hasOauth && !localEndpoint}
-          initialEnvKey={localEndpoint ? 'OPENAI_BASE_URL' : undefined}
           onBack={() => setOnboardingMode('oauth')}
           onSave={(envKey, value, name, apiKey) => saveOnboardingApiKey(envKey, value, name, ctx, apiKey)}
           options={apiKeyOptions}
@@ -657,8 +586,7 @@ export function ApiKeyForm({
   redactedValue
 }: {
   canGoBack: boolean
-  /** Preselect a specific option by env key (e.g. 'OPENAI_BASE_URL' to land on
-   *  the local / custom endpoint form). Falls back to the first option. */
+  /** Preselect a specific option by env key. Falls back to the first option. */
   initialEnvKey?: string
   isSet?: (envKey: string) => boolean
   onBack: () => void

@@ -1,11 +1,19 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
 import { $desktopOnboarding, type DesktopOnboardingState, type OnboardingContext } from '@/store/onboarding'
 import type { OAuthProvider } from '@/types/hermes'
 
 import { Picker } from './desktop-onboarding-overlay'
+
+const hermesMocks = vi.hoisted(() => ({
+  getGlobalModelOptions: vi.fn()
+}))
+
+vi.mock('@/hermes', () => ({
+  getGlobalModelOptions: () => hermesMocks.getGlobalModelOptions()
+}))
 
 function provider(id: string, name = id): OAuthProvider {
   return {
@@ -36,6 +44,12 @@ const ctx: OnboardingContext = { requestGateway: async () => undefined as never 
 
 beforeEach(() => {
   ensureLocalStorage()
+  hermesMocks.getGlobalModelOptions.mockResolvedValue({
+    providers: [
+      { name: 'gflabtoken', slug: 'gflab', models: ['openai/gpt-5.5'], authenticated: false, auth_type: 'api_key', key_env: 'OPENAI_API_KEY' },
+      { name: 'DeepSeek', slug: 'deepseek', models: [], authenticated: false, auth_type: 'api_key', key_env: 'DEEPSEEK_API_KEY' }
+    ]
+  })
 })
 
 afterEach(() => {
@@ -79,6 +93,45 @@ describe('onboarding Picker', () => {
     expect(screen.getByPlaceholderText('粘贴 API 密钥')).toBeTruthy()
     expect(screen.queryByText(/访问权限/)).toBeNull()
     expect(screen.queryByText(/request timed out/)).toBeNull()
+  })
+
+  it('does not expose upstream API-key marketplace entries in OPL first run', async () => {
+    $desktopOnboarding.set({
+      ...baseApiKeyState(),
+      reason: 'missing model access'
+    })
+
+    render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <Picker ctx={ctx} />
+      </I18nProvider>
+    )
+
+    expect(screen.getByText('One Person Lab 模型访问')).toBeTruthy()
+    expect(screen.getByText(/gflabtoken/)).toBeTruthy()
+    expect(screen.queryByText('DeepSeek')).toBeNull()
+    expect(screen.queryByText('OpenRouter')).toBeNull()
+    expect(screen.queryByText(/自托管/)).toBeNull()
+  })
+
+  it('does not expose the legacy Base URL endpoint even when local endpoint setup is requested', () => {
+    $desktopOnboarding.set({
+      ...baseApiKeyState(),
+      localEndpoint: true,
+      reason: 'legacy local endpoint request'
+    })
+
+    render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <Picker ctx={ctx} />
+      </I18nProvider>
+    )
+
+    expect(screen.getByText('One Person Lab 模型访问')).toBeTruthy()
+    expect(screen.getByPlaceholderText('粘贴 API 密钥')).toBeTruthy()
+    expect(screen.queryByDisplayValue('OPENAI_BASE_URL')).toBeNull()
+    expect(screen.queryByText(/Base URL/i)).toBeNull()
+    expect(screen.queryByText(/自定义/)).toBeNull()
   })
 
   it('features Nous Portal and hides other providers behind a disclosure', () => {

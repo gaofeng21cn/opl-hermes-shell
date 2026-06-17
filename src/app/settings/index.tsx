@@ -5,7 +5,7 @@ import { Tip } from '@/components/ui/tooltip'
 import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { Archive, Bell, Globe, Info, KeyRound, Settings2, Wrench, Zap } from '@/lib/icons'
+import { Archive, Bell, Brain, Info, Wrench, Zap } from '@/lib/icons'
 import { notifyError } from '@/store/notifications'
 
 import { useRouteEnumParam } from '../hooks/use-route-enum-param'
@@ -14,11 +14,10 @@ import { OverlayMain, OverlayNavItem, OverlaySidebar, OverlaySplitLayout } from 
 import { OverlayView } from '../overlays/overlay-view'
 
 import { AboutSettings } from './about-settings'
+import { AgentsCapabilitiesSettings } from './agents-capabilities-settings'
 import { AppearanceSettings } from './appearance-settings'
 import { ConfigSettings } from './config-settings'
 import { SECTIONS } from './constants'
-import { GatewaySettings } from './gateway-settings'
-import { KEYS_VIEWS, KeysSettings, type KeysView } from './keys-settings'
 import { McpSettings } from './mcp-settings'
 import { NotificationsSettings } from './notifications-settings'
 import { ProvidersSettings } from './providers-settings'
@@ -28,8 +27,7 @@ import type { SettingsPageProps, SettingsView as SettingsViewId } from './types'
 const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   ...SECTIONS.map(s => `config:${s.id}` as SettingsViewId),
   'providers',
-  'gateway',
-  'keys',
+  'agents',
   'mcp',
   'notifications',
   'sessions',
@@ -39,12 +37,6 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
 export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChanged }: SettingsPageProps) {
   const { t } = useI18n()
   const [activeView, setActiveView] = useRouteEnumParam('tab', SETTINGS_VIEWS, 'config:model' as SettingsViewId)
-  const [keysView, setKeysView] = useRouteEnumParam<KeysView>('kview', KEYS_VIEWS, 'tools')
-
-  const openKeysView = (view: KeysView) => {
-    setActiveView('keys')
-    setKeysView(view)
-  }
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -109,35 +101,11 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
             onClick={() => setActiveView('providers')}
           />
           <OverlayNavItem
-            active={activeView === 'gateway'}
-            icon={Globe}
-            label={t.settings.nav.gateway}
-            onClick={() => setActiveView('gateway')}
+            active={activeView === 'agents'}
+            icon={Brain}
+            label={t.settings.nav.agentsCapabilities}
+            onClick={() => setActiveView('agents')}
           />
-          <OverlayNavItem
-            active={activeView === 'keys'}
-            icon={KeyRound}
-            label={t.settings.nav.apiKeys}
-            onClick={() => setActiveView('keys')}
-          />
-          {activeView === 'keys' && (
-            <div className="ml-3.5 flex flex-col gap-0.5 pl-1.5">
-              <OverlayNavItem
-                active={keysView === 'tools'}
-                icon={Wrench}
-                label={t.settings.nav.keysTools}
-                nested
-                onClick={() => openKeysView('tools')}
-              />
-              <OverlayNavItem
-                active={keysView === 'settings'}
-                icon={Settings2}
-                label={t.settings.nav.keysSettings}
-                nested
-                onClick={() => openKeysView('settings')}
-              />
-            </div>
-          )}
           <OverlayNavItem
             active={activeView === 'mcp'}
             icon={Wrench}
@@ -192,8 +160,6 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
             <AppearanceSettings />
           ) : activeView === 'about' ? (
             <AboutSettings />
-          ) : activeView === 'gateway' ? (
-            <GatewaySettings />
           ) : activeView.startsWith('config:') ? (
             <ConfigSettings
               activeSectionId={activeView.slice('config:'.length)}
@@ -203,8 +169,8 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
             />
           ) : activeView === 'providers' ? (
             <ProvidersSettings />
-          ) : activeView === 'keys' ? (
-            <KeysSettings view={keysView} />
+          ) : activeView === 'agents' ? (
+            <AgentsCapabilitiesSettings />
           ) : activeView === 'mcp' ? (
             <McpSettings gateway={gateway} onConfigSaved={onConfigSaved} />
           ) : activeView === 'notifications' ? (

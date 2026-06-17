@@ -22,20 +22,22 @@ describe('model-status-label', () => {
   })
 
   it('appends fast + effort session state to the status label', () => {
-    expect(formatModelStatusLabel('openai/gpt-5.5', { fastMode: true, reasoningEffort: 'high' })).toBe(
-      'GPT-5.5 · Fast High'
+    expect(formatModelStatusLabel('anthropic/claude-opus-4.8', { fastMode: true, reasoningEffort: 'high' })).toBe(
+      'Opus 4.8 · Fast High'
     )
   })
 
   it('always surfaces the effort (default medium) so the level is visible', () => {
-    expect(formatModelStatusLabel('openai/gpt-5.5', { reasoningEffort: 'medium' })).toBe('GPT-5.5 · Med')
-    expect(formatModelStatusLabel('openai/gpt-5.5')).toBe('GPT-5.5 · Med')
+    expect(formatModelStatusLabel('anthropic/claude-opus-4.8', { reasoningEffort: 'medium' })).toBe('Opus 4.8 · Med')
+    expect(formatModelStatusLabel('anthropic/claude-opus-4.8')).toBe('Opus 4.8 · Med')
   })
 
   it('labels the current OPL recommended max model as Auto without treating auto as a model id', () => {
+    expect(displayModelName('auto')).toBe('Auto')
     expect(formatModelStatusLabel('openai/gpt-5.5', { reasoningEffort: 'xhigh' })).toBe(
       'Auto · GPT-5.5 Max'
     )
+    expect(formatModelStatusLabel('openai/gpt-5.5')).toBe('Auto · GPT-5.5 Max')
   })
 
   it('returns just the placeholder name when there is no model', () => {

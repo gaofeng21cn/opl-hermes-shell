@@ -14,6 +14,116 @@ const {
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 const PRODUCT_NAME = 'One Person Lab Hermes Candidate'
 
+const PURPOSE_ROUTES = Object.freeze({
+  mas: {
+    purpose_id: 'mas',
+    aliases: [
+      'mas',
+      'medautoscience',
+      'med-auto-science',
+      'med-autoscience',
+      'study',
+      'paper',
+      'research',
+      '科研',
+      '论文',
+      '研究',
+      '糖尿病',
+      '医学'
+    ],
+    agent_id: 'mas',
+    project_id: 'medautoscience',
+    target_domain_id: 'med-autoscience',
+    label: 'Med Auto Science',
+    owner_surface: 'opl foundry agents list --json',
+    start_surface: 'opl start --project medautoscience --json',
+    app_action_id: 'workspace_ensure',
+    app_action_payload: {
+      agent_id: 'mas',
+      project_id: 'medautoscience',
+      mode: 'auto',
+      title: 'Hermes MAS workspace route'
+    },
+    ordinary_golden_path:
+      'study -> stage -> domain owner receipt or typed blocker -> research artifact handoff',
+    prompt_contract:
+      'Route this task through MAS / Med Auto Science authority. Use OPL CLI/App action/skill authority where available. Do not write MAS truth, owner receipts, typed blockers, memory body, or artifact body from this shell adapter.'
+  },
+  mag: {
+    purpose_id: 'mag',
+    aliases: ['mag', 'medautogrant', 'med-auto-grant', 'med-autogrant', 'grant', 'proposal', '基金', '标书', '申请书'],
+    agent_id: 'mag',
+    project_id: 'medautogrant',
+    target_domain_id: 'med-autogrant',
+    label: 'Med Auto Grant',
+    owner_surface: 'opl foundry agents list --json',
+    start_surface: 'opl start --project medautogrant --json',
+    app_action_id: 'workspace_ensure',
+    app_action_payload: {
+      agent_id: 'mag',
+      project_id: 'medautogrant',
+      mode: 'auto',
+      title: 'Hermes MAG workspace route'
+    },
+    ordinary_golden_path:
+      'grant -> stage -> domain owner receipt or typed blocker -> grant deliverable handoff',
+    prompt_contract:
+      'Route this task through MAG / Med Auto Grant authority. Use OPL CLI/App action/skill authority where available. Do not write MAG truth, owner receipts, typed blockers, memory body, or artifact body from this shell adapter.'
+  },
+  rca: {
+    purpose_id: 'rca',
+    aliases: ['rca', 'redcube', 'redcube-ai', 'deck', 'slides', 'visual', '演示', 'ppt', '幻灯片', '视觉'],
+    agent_id: 'rca',
+    project_id: 'redcube',
+    target_domain_id: 'redcube',
+    label: 'RedCube AI',
+    owner_surface: 'opl foundry agents list --json',
+    start_surface: 'opl start --project redcube --json',
+    app_action_id: 'workspace_ensure',
+    app_action_payload: {
+      agent_id: 'rca',
+      project_id: 'redcube',
+      mode: 'auto',
+      title: 'Hermes RCA workspace route'
+    },
+    ordinary_golden_path:
+      'deck -> stage -> domain owner receipt or typed blocker -> visual deliverable handoff',
+    prompt_contract:
+      'Route this task through RCA / RedCube AI authority. Use OPL CLI/App action/skill authority where available. Do not write RCA truth, owner receipts, typed blockers, memory body, or artifact body from this shell adapter.'
+  },
+  opl: {
+    purpose_id: 'opl',
+    aliases: ['opl', 'one-person-lab', 'framework', 'workspace', 'runtime'],
+    agent_id: 'opl',
+    project_id: 'one-person-lab',
+    target_domain_id: 'one-person-lab',
+    label: 'One Person Lab',
+    owner_surface: 'opl app state --profile fast --json',
+    start_surface: 'opl app state --profile fast --json',
+    app_action_id: null,
+    app_action_payload: null,
+    ordinary_golden_path:
+      'purpose -> OPL App state/action boundary -> Codex executor or owner route -> refs-only receipt or next action',
+    prompt_contract:
+      'Route this task through OPL Framework/App authority. Use opl app state/action, OPL CLI, and Codex skills as the owner surfaces. Do not create a second runtime truth source in the Hermes adapter.'
+  }
+})
+
+function normalizePurposeToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+}
+
+const PURPOSE_ROUTE_ALIASES = new Map()
+for (const [routeId, route] of Object.entries(PURPOSE_ROUTES)) {
+  PURPOSE_ROUTE_ALIASES.set(normalizePurposeToken(routeId), routeId)
+  for (const alias of route.aliases) {
+    PURPOSE_ROUTE_ALIASES.set(normalizePurposeToken(alias), routeId)
+  }
+}
+
 const CANDIDATE_CONFIG_FIELDS = {
   model_context_length: {
     category: 'model',
@@ -488,7 +598,9 @@ const BRIDGE_REST_ROUTES = [
   { method: 'GET', path: '/api/model/info' },
   { method: 'POST', path: '/api/model/set' },
   { method: 'GET', path: '/api/model/auxiliary' },
-  { method: 'GET', path: '/api/model/recommended-default' }
+  { method: 'GET', path: '/api/model/recommended-default' },
+  { method: 'GET', path: '/api/opl/purpose-routes' },
+  { method: 'GET', path: '/api/smoke/connection' }
 ]
 
 const BRIDGE_RPC_METHODS = [
@@ -503,6 +615,8 @@ const BRIDGE_RPC_METHODS = [
   'config.set',
   'setup.status',
   'setup.runtime_check',
+  'purpose.routes',
+  'purpose.route.resolve',
   'model.options',
   'file.attach',
   'image.attach',
@@ -538,6 +652,17 @@ function describeOplCodexGatewayScope() {
     executor: 'codex_app_server',
     restRoutes: BRIDGE_REST_ROUTES.map(route => ({ ...route })),
     rpcMethods: [...BRIDGE_RPC_METHODS],
+    purposeRoutes: Object.values(PURPOSE_ROUTES).map(route => ({
+      purpose_id: route.purpose_id,
+      agent_id: route.agent_id,
+      project_id: route.project_id,
+      target_domain_id: route.target_domain_id,
+      label: route.label,
+      owner_surface: route.owner_surface,
+      start_surface: route.start_surface,
+      app_action_id: route.app_action_id,
+      ordinary_golden_path: route.ordinary_golden_path
+    })),
     upstreamHermesBackendOwns: [
       'config',
       'env',
@@ -597,6 +722,21 @@ function normalizeCodexError(error, details = {}) {
     code: error?.code ?? null,
     data: null,
     ...details
+  }
+}
+
+function safeJsonParse(raw) {
+  const text = String(raw || '').trim()
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    const firstBrace = text.indexOf('{')
+    const lastBrace = text.lastIndexOf('}')
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return JSON.parse(text.slice(firstBrace, lastBrace + 1))
+    }
+    throw new Error('Command did not return JSON.')
   }
 }
 
@@ -834,6 +974,10 @@ class CodexAppServerClient {
 
     if (!message.method) return
     this.onEvent(message.method, message.params || {})
+    const activeForEvent = this.activeTurn || this.pendingTurnStart
+    if (activeForEvent?.onCodexEvent) {
+      activeForEvent.onCodexEvent(message.method, message.params || {}, message)
+    }
 
     if (message.method === 'turn/started') {
       this.activatePendingTurn(message.params?.turn?.id)
@@ -925,7 +1069,7 @@ class CodexAppServerClient {
     return result
   }
 
-  async runTurn({ threadId, prompt, cwd, onDelta }) {
+  async runTurn({ threadId, prompt, cwd, onDelta, onCodexEvent }) {
     if (this.activeTurn || this.pendingTurnStart) {
       throw new Error('Codex is already running a turn')
     }
@@ -934,7 +1078,8 @@ class CodexAppServerClient {
         resolve,
         output: '',
         threadId,
-        onDelta: typeof onDelta === 'function' ? onDelta : () => undefined
+        onDelta: typeof onDelta === 'function' ? onDelta : () => undefined,
+        onCodexEvent: typeof onCodexEvent === 'function' ? onCodexEvent : () => undefined
       }
     })
     await this.request('turn/start', {
@@ -971,7 +1116,8 @@ function createOplCodexGateway({
   initialInitialize = null,
   initialSetup = null,
   appServerClient = null,
-  codexExecutable = null
+  codexExecutable = null,
+  runOplCommand = null
 } = {}) {
   const token = crypto.randomBytes(24).toString('base64url')
   const sessions = new Map()
@@ -1000,6 +1146,209 @@ function createOplCodexGateway({
 
   function defaultCwd() {
     return process.env.OPL_HERMES_DEFAULT_CWD || process.env.PWD || process.env.HOME || process.cwd()
+  }
+
+  function purposeRouteCatalog() {
+    return {
+      surface_kind: 'opl_hermes_purpose_route_catalog.v1',
+      route_owner: 'one-person-lab',
+      shell_role: 'implementation_adapter_only',
+      bridge_mode: 'executor_agent_route_bridge',
+      authority_boundary: {
+        uses_opl_cli_app_action_or_skill_authority: true,
+        creates_second_truth_source: false,
+        can_write_domain_truth: false,
+        can_create_owner_receipt: false,
+        can_create_typed_blocker: false,
+        can_claim_domain_ready: false
+      },
+      routes: Object.values(PURPOSE_ROUTES).map(route => ({
+        purpose_id: route.purpose_id,
+        aliases: [...route.aliases],
+        agent_id: route.agent_id,
+        project_id: route.project_id,
+        target_domain_id: route.target_domain_id,
+        label: route.label,
+        owner_surface: route.owner_surface,
+        start_surface: route.start_surface,
+        app_action_id: route.app_action_id,
+        app_action_payload: route.app_action_payload,
+        ordinary_golden_path: route.ordinary_golden_path,
+        codex_prompt_contract: route.prompt_contract
+      }))
+    }
+  }
+
+  function routeIdFromParams(params = {}) {
+    for (const key of ['purpose', 'purpose_id', 'route', 'agent_id', 'agent', 'project_id', 'domain_id']) {
+      const normalized = normalizePurposeToken(params[key])
+      if (PURPOSE_ROUTE_ALIASES.has(normalized)) return PURPOSE_ROUTE_ALIASES.get(normalized)
+    }
+
+    const text = normalizePurposeToken(`${params.title || ''} ${params.text || ''} ${params.prompt || ''}`)
+    if (!text) return null
+    for (const [alias, routeId] of PURPOSE_ROUTE_ALIASES) {
+      if (/[^a-z0-9-]/.test(alias) && text.includes(alias)) {
+        return routeId
+      }
+      if (
+        alias.length >= 2 &&
+        new RegExp(`(?:^|[^a-z0-9])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[^a-z0-9])`, 'i').test(text)
+      ) {
+        return routeId
+      }
+    }
+    return null
+  }
+
+  function resolvePurposeRoute(params = {}) {
+    const routeId = routeIdFromParams(params)
+    return routeId ? PURPOSE_ROUTES[routeId] : null
+  }
+
+  function publicPurposeRoute(route) {
+    if (!route) return null
+    return {
+      purpose_id: route.purpose_id,
+      agent_id: route.agent_id,
+      project_id: route.project_id,
+      target_domain_id: route.target_domain_id,
+      label: route.label,
+      owner_surface: route.owner_surface,
+      start_surface: route.start_surface,
+      app_action_id: route.app_action_id,
+      app_action_payload: route.app_action_payload,
+      ordinary_golden_path: route.ordinary_golden_path,
+      codex_prompt_contract: route.prompt_contract
+    }
+  }
+
+  async function runOplJson(args, { stage, timeoutMs = 30_000 } = {}) {
+    const result =
+      typeof runOplCommand === 'function'
+        ? await runOplCommand(args, { cwd: defaultCwd(), env: process.env, stage, timeoutMs })
+        : await runCommand('opl', args, {
+            cwd: defaultCwd(),
+            env: process.env,
+            stage: stage || args.join(' '),
+            emit: ev => {
+              if (ev.stream === 'stderr') log(ev.line)
+            },
+            timeoutMs
+          })
+    const parsed = result.stdout ? safeJsonParse(result.stdout) : null
+    return {
+      ok: result.code === 0,
+      code: result.code,
+      signal: result.signal || null,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      json: parsed
+    }
+  }
+
+  async function readPurposeRouteReceipt(route, params = {}) {
+    if (!route) return null
+    const receipt = {
+      surface_kind: 'opl_hermes_purpose_route_receipt.v1',
+      purpose_id: route.purpose_id,
+      agent_id: route.agent_id,
+      project_id: route.project_id,
+      target_domain_id: route.target_domain_id,
+      label: route.label,
+      owner_surface: route.owner_surface,
+      start_surface: route.start_surface,
+      app_action_id: route.app_action_id,
+      shell_role: 'implementation_adapter_only',
+      route_owner: 'one-person-lab',
+      codex_prompt_contract: route.prompt_contract,
+      authority_boundary: {
+        uses_opl_cli_app_action_or_skill_authority: true,
+        creates_second_truth_source: false,
+        can_write_domain_truth: false,
+        can_create_owner_receipt: false,
+        can_create_typed_blocker: false,
+        can_claim_domain_ready: false
+      },
+      app_action_dry_run: null,
+      start_readback: null,
+      errors: []
+    }
+
+    if (route.app_action_id) {
+      try {
+        const payload = {
+          ...(route.app_action_payload || {}),
+          ...(isPlainObject(params.route_payload) ? params.route_payload : {}),
+          ...(isPlainObject(params.payload) ? params.payload : {})
+        }
+        const result = await runOplJson(
+          [
+            'app',
+            'action',
+            'execute',
+            '--action',
+            route.app_action_id,
+            '--payload',
+            JSON.stringify(payload),
+            '--dry-run',
+            '--json'
+          ],
+          { stage: `opl-purpose-${route.purpose_id}-action-dry-run`, timeoutMs: 60_000 }
+        )
+        receipt.app_action_dry_run = {
+          ok: result.ok,
+          code: result.code,
+          action_id: route.app_action_id,
+          payload,
+          result: result.json
+        }
+        if (!result.ok) {
+          receipt.errors.push({
+            surface: 'opl app action execute --dry-run',
+            code: result.code,
+            message: result.stderr.trim() || result.stdout.trim() || `exit code ${result.code}`
+          })
+        }
+      } catch (error) {
+        receipt.errors.push({
+          surface: 'opl app action execute --dry-run',
+          message: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
+
+    const startArgs =
+      route.purpose_id === 'opl'
+        ? ['app', 'state', '--profile', 'fast', '--json']
+        : ['start', '--project', route.project_id, '--json']
+    try {
+      const result = await runOplJson(startArgs, {
+        stage: `opl-purpose-${route.purpose_id}-start-readback`,
+        timeoutMs: 60_000
+      })
+      receipt.start_readback = {
+        ok: result.ok,
+        code: result.code,
+        command: `opl ${startArgs.join(' ')}`,
+        result: result.json
+      }
+      if (!result.ok) {
+        receipt.errors.push({
+          surface: `opl ${startArgs.join(' ')}`,
+          code: result.code,
+          message: result.stderr.trim() || result.stdout.trim() || `exit code ${result.code}`
+        })
+      }
+    } catch (error) {
+      receipt.errors.push({
+        surface: `opl ${startArgs.join(' ')}`,
+        message: error instanceof Error ? error.message : String(error)
+      })
+    }
+
+    receipt.status = receipt.errors.length ? 'route_readback_with_blockers' : 'route_readback_ready'
+    return receipt
   }
 
   function getCodexClient(cwd = defaultCwd()) {
@@ -1456,6 +1805,7 @@ function createOplCodexGateway({
   function createSession(params = {}) {
     const id = `opl-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`
     const cwd = typeof params.cwd === 'string' && params.cwd.trim() ? path.resolve(params.cwd) : defaultCwd()
+    const purposeRoute = resolvePurposeRoute(params)
     const messages = Array.isArray(params.messages)
       ? params.messages
           .map(message => ({
@@ -1477,7 +1827,9 @@ function createOplCodexGateway({
       messages,
       usage: { calls: 0, input: 0, output: 0, total: 0 },
       threadId: null,
-      codexThread: null
+      codexThread: null,
+      purposeRoute,
+      routeReceipt: null
     }
     sessions.set(id, session)
     return session
@@ -1488,7 +1840,14 @@ function createOplCodexGateway({
       '你是 One Person Lab App 内由 Codex app-server 固定承载的后台代理。',
       '保持中文、直接、专业；按用户任务推进，不解释 UI 或实现细节。',
       `Hermes session id: ${session.id}`,
-      `workspace: ${session.cwd || defaultCwd()}`
+      `workspace: ${session.cwd || defaultCwd()}`,
+      session.purposeRoute
+        ? [
+            '',
+            'OPL purpose route contract:',
+            JSON.stringify(publicPurposeRoute(session.purposeRoute), null, 2)
+          ].join('\n')
+        : ''
     ].join('\n')
   }
 
@@ -1507,6 +1866,13 @@ function createOplCodexGateway({
 
   function buildPrompt(text, session) {
     return [
+      session.purposeRoute
+        ? [
+            'OPL purpose route receipt:',
+            JSON.stringify(session.routeReceipt || publicPurposeRoute(session.purposeRoute), null, 2),
+            ''
+          ].join('\n')
+        : '',
       '用户输入：',
       text,
       '',
@@ -1816,6 +2182,22 @@ function createOplCodexGateway({
       json(response, 200, { provider: configuredModel.provider, model: configuredModel.model, free_tier: null })
       return
     }
+    if (pathname === '/api/opl/purpose-routes') {
+      json(response, 200, purposeRouteCatalog())
+      return
+    }
+    if (pathname === '/api/smoke/connection') {
+      if (process.env.OPL_HERMES_SMOKE_EXPOSE_DESCRIPTOR !== '1') {
+        json(response, 404, unsupportedPayload('rest', 'GET /api/smoke/connection'))
+        return
+      }
+      json(response, 200, {
+        surface_kind: 'opl_hermes_smoke_connection.v1',
+        authMode: 'token',
+        wsUrl: `ws://127.0.0.1:${port}/api/ws?token=${encodeURIComponent(token)}`
+      })
+      return
+    }
     unsupportedRest(response, request, pathname)
   }
 
@@ -1875,6 +2257,9 @@ function createOplCodexGateway({
       }
       if (method === 'session.create') {
         const session = createSession(params)
+        if (session.purposeRoute) {
+          event(socket, 'route.selected', session.id, { route: publicPurposeRoute(session.purposeRoute) })
+        }
         bindCodexThread(session)
           .then(() => {
             send(socket, {
@@ -1913,6 +2298,11 @@ function createOplCodexGateway({
       if (method === 'prompt.submit') {
         const session = sessions.get(String(params.session_id))
         if (!session) throw new Error('session not found')
+        const promptRoute = resolvePurposeRoute({ ...params, prompt: params.text })
+        if (promptRoute) {
+          session.purposeRoute = promptRoute
+          event(socket, 'route.selected', session.id, { route: publicPurposeRoute(promptRoute) })
+        }
         submitPrompt(socket, session, String(params.text || ''))
           .then(() => send(socket, { jsonrpc: '2.0', id, result: { ok: true } }))
           .catch(error => send(socket, { jsonrpc: '2.0', id, error: { message: error instanceof Error ? error.message : String(error) } }))
@@ -1980,6 +2370,21 @@ function createOplCodexGateway({
           .catch(error => send(socket, { jsonrpc: '2.0', id, error: { message: error.message } }))
         return
       }
+      if (method === 'purpose.routes') {
+        send(socket, { jsonrpc: '2.0', id, result: purposeRouteCatalog() })
+        return
+      }
+      if (method === 'purpose.route.resolve') {
+        const route = resolvePurposeRoute(params)
+        if (!route) {
+          send(socket, { jsonrpc: '2.0', id, result: { ok: false, route: null } })
+          return
+        }
+        readPurposeRouteReceipt(route, params)
+          .then(receipt => send(socket, { jsonrpc: '2.0', id, result: { ok: true, route: publicPurposeRoute(route), receipt } }))
+          .catch(error => send(socket, { jsonrpc: '2.0', id, error: { message: error instanceof Error ? error.message : String(error) } }))
+        return
+      }
       if (method === 'model.options') {
         send(socket, { jsonrpc: '2.0', id, result: modelOptions() })
         return
@@ -2034,6 +2439,17 @@ function createOplCodexGateway({
     session.usage.input += userText.length
     session.usage.total = session.usage.input + session.usage.output
     event(socket, 'session.info', session.id, runtimeInfo(session))
+    if (session.purposeRoute) {
+      event(socket, 'route.selected', session.id, { route: publicPurposeRoute(session.purposeRoute) })
+      session.routeReceipt = await readPurposeRouteReceipt(session.purposeRoute, {
+        text: userText,
+        session_id: session.id
+      })
+      event(socket, session.routeReceipt.errors.length ? 'route.error' : 'route.receipt', session.id, {
+        route: publicPurposeRoute(session.purposeRoute),
+        receipt: session.routeReceipt
+      })
+    }
     event(socket, 'message.start', session.id, { role: 'assistant' })
 
     const result = await getCodexClient(session.cwd).runTurn({
@@ -2045,6 +2461,17 @@ function createOplCodexGateway({
         session.usage.output += chunk.length
         session.usage.total = session.usage.input + session.usage.output
         event(socket, 'message.delta', session.id, { text: chunk })
+      },
+      onCodexEvent: (method, params) => {
+        if (/tool/i.test(method)) {
+          event(socket, 'tool.event', session.id, { method, params })
+        }
+        if (/approval|permission|attestation/i.test(method)) {
+          event(socket, 'approval.event', session.id, { method, params })
+        }
+        if (/error/i.test(method)) {
+          event(socket, 'message.error', session.id, { method, params })
+        }
       }
     })
     if (!result.ok && result.error) {

@@ -8,6 +8,7 @@ const outDir = path.join(root, 'out')
 const releaseDir = path.join(root, 'release')
 const manifestPath = path.join(outDir, 'hermes-codex-candidate-manifest.json')
 const productName = 'One Person Lab Hermes Candidate'
+const executableName = productName
 const upstreamSourceRef = '5e01a5dbf1b7bc0144d9057be706da1ea9f065c3'
 
 function run(command, args, options = {}) {
@@ -81,9 +82,16 @@ function assembleAppBundle() {
   fs.cpSync(path.join(root, 'build/install-stamp.json'), path.join(resources, 'install-stamp.json'))
   fs.cpSync(path.join(root, 'build/native-deps'), path.join(resources, 'native-deps'), { recursive: true })
 
+  const macOsDir = path.join(contents, 'MacOS')
+  const electronBinary = path.join(macOsDir, 'Electron')
+  const brandedBinary = path.join(macOsDir, executableName)
+  if (!fs.existsSync(electronBinary)) throw new Error(`Electron binary missing from app template: ${electronBinary}`)
+  fs.renameSync(electronBinary, brandedBinary)
+  fs.chmodSync(brandedBinary, 0o755)
+
   const plist = path.join(contents, 'Info.plist')
   setPlist(plist, 'CFBundleDisplayName', productName)
-  setPlist(plist, 'CFBundleExecutable', 'Electron')
+  setPlist(plist, 'CFBundleExecutable', executableName)
   setPlist(plist, 'CFBundleName', productName)
   setPlist(plist, 'CFBundleIdentifier', 'cn.onepersonlab.app.hermes-codex-candidate')
   setPlist(plist, 'CFBundleIconFile', 'icon.icns')
@@ -108,6 +116,7 @@ const manifest = {
   package_kind: 'explicit_candidate_app_bundle',
   app_bundle_path: relativeAppPath,
   app_bundle_name: path.basename(appPath),
+  app_bundle_executable: executableName,
   source_repo: 'https://github.com/NousResearch/hermes-agent',
   source_path: 'apps/desktop',
   source_ref: upstreamSourceRef,

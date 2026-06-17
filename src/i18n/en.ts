@@ -274,6 +274,7 @@ export const en: Translations = {
       apiKeys: 'Tools & Keys',
       keysTools: 'Tools',
       keysSettings: 'Settings',
+      agentsCapabilities: 'Agents & Capabilities',
       mcp: 'MCP',
       archivedChats: 'Archived Chats',
       about: 'About',
@@ -405,6 +406,9 @@ export const en: Translations = {
       loading: 'Loading One Person Lab configuration...',
       emptyTitle: 'Nothing to configure',
       emptyDesc: 'This section has no adjustable settings.',
+      emptySectionTitle: section => `${section} is managed`,
+      emptySectionDesc:
+        'This capability is managed by One Person Lab / Codex for this candidate, or does not need user configuration yet.',
       failedLoad: 'Settings failed to load',
       autosaveFailed: 'Autosave failed',
       imported: 'Config imported',
@@ -502,7 +506,8 @@ export const en: Translations = {
     keys: {
       loading: 'Loading API keys and credentials...',
       failedLoad: 'API keys failed to load',
-      empty: 'Nothing configured in this category yet.'
+      empty:
+        'This capability is managed by One Person Lab / Codex for this candidate, or does not need user configuration yet.'
     },
     mcp: {
       loading: 'Loading MCP servers...',
@@ -524,7 +529,8 @@ export const en: Translations = {
       reload: 'Reload MCP',
       reloading: 'Reloading...',
       emptyTitle: 'No MCP servers',
-      emptyDesc: 'Add a stdio or HTTP server to expose MCP tools.',
+      emptyDesc:
+        'MCP is available when a One Person Lab or Codex workflow needs it. No manual server is required for the default chat-first setup.',
       disabled: 'disabled',
       editServer: 'Edit server',
       name: 'Name',
@@ -583,6 +589,24 @@ export const en: Translations = {
       failedRemove: provider => `Could not remove ${provider}`,
       noProviderKeys: 'No model access key is configurable.',
       loading: 'Loading model access...'
+    },
+    agentsCapabilities: {
+      loading: 'Loading agents and capabilities...',
+      failedLoad: 'Agents and capabilities failed to load',
+      title: 'Agents & Capabilities',
+      intro:
+        'These entries route ordinary chat into One Person Lab owner surfaces. The GUI shows route receipts only; it does not write MAS/MAG/RCA domain truth, artifact bodies, or quality verdicts.',
+      emptyTitle: 'No agent routes available',
+      emptyDesc: 'This candidate did not receive a purpose route catalog from the OPL gateway.',
+      owner: 'Owner surface',
+      project: 'Project',
+      action: 'Prepare action',
+      readback: 'Readback',
+      authority: 'Authority boundary',
+      aliases: 'Triggers',
+      routeReady: 'Routable',
+      routeBoundary: 'GUI routes only; domain authority stays with OPL owners',
+      noDomainTruth: 'No domain truth writes / no owner receipts / no domain-ready claims'
     },
     sessions: {
       loading: 'Loading archived sessions…',

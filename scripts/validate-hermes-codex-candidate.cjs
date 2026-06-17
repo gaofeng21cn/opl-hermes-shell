@@ -9,6 +9,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const mainProcess = read('electron/main.cjs')
 const oplBootstrapRunner = read('electron/opl-bootstrap-runner.cjs')
 const oplCodexGateway = read('electron/opl-codex-gateway.cjs')
+const commandPalette = read('src/app/command-palette/index.tsx')
 const upstreamSourceRef = '5e01a5dbf1b7bc0144d9057be706da1ea9f065c3'
 
 function assert(condition, message) {
@@ -89,12 +90,34 @@ assert(oplCodexGateway.includes("'/api/providers/oauth'"), 'adapter must provide
 assert(oplCodexGateway.includes("providers: []"), 'adapter must report no OAuth providers for the OPL model access path')
 assert(oplCodexGateway.includes("session.create"), 'adapter must implement Hermes session.create RPC')
 assert(oplCodexGateway.includes("prompt.submit"), 'adapter must implement Hermes prompt.submit RPC')
+assert(oplCodexGateway.includes("purpose.route.resolve"), 'adapter must implement OPL purpose route resolve RPC')
+assert(oplCodexGateway.includes("'/api/opl/purpose-routes'"), 'adapter must expose purpose route catalog REST route')
+assert(oplCodexGateway.includes("Med Auto Science"), 'adapter must declare the MAS purpose route')
+assert(oplCodexGateway.includes("Med Auto Grant"), 'adapter must declare the MAG purpose route')
+assert(oplCodexGateway.includes("RedCube AI"), 'adapter must declare the RCA purpose route')
+assert(
+  oplCodexGateway.includes("'app'") && oplCodexGateway.includes("'action'") && oplCodexGateway.includes("'execute'"),
+  'adapter must route purpose preflight through OPL app action execute'
+)
+assert(oplCodexGateway.includes("route.receipt"), 'adapter must emit successful purpose route receipts')
+assert(oplCodexGateway.includes("route.error"), 'adapter must emit purpose route blockers as errors')
+assert(oplCodexGateway.includes("tool.event"), 'adapter must bridge Codex tool events to Hermes-compatible events')
+assert(oplCodexGateway.includes("approval.event"), 'adapter must bridge Codex approval events to Hermes-compatible events')
 assert(oplCodexGateway.includes("config.get"), 'adapter must implement renderer-safe config.get RPC')
 assert(oplCodexGateway.includes("config.set"), 'adapter must implement renderer-safe config.set RPC')
 assert(
   read('src/store/onboarding.ts').includes("setup?.provider_configured === true"),
   'onboarding must auto-skip the model access form when setup.status already reports configured credentials'
 )
+assert(
+  commandPalette.includes("tab: 'providers'") && commandPalette.includes("tab: 'agents'") && commandPalette.includes("tab: 'mcp'"),
+  'command palette must keep ordinary OPL model access, agents/capabilities, and MCP settings entries'
+)
+assert(!commandPalette.includes("tab: 'gateway'"), 'command palette must not expose the upstream gateway settings entry')
+assert(!commandPalette.includes("tab: 'keys&kview=tools'"), 'command palette must not expose the upstream tools/key settings entry')
+assert(!commandPalette.includes("tab: 'keys&kview=settings'"), 'command palette must not expose the upstream key gateway settings entry')
+assert(read('src/app/settings/index.tsx').includes("'agents'"), 'Settings must expose the OPL agents/capabilities page')
+assert(fs.existsSync(path.join(root, 'src/app/settings/agents-capabilities-settings.tsx')), 'candidate must include the OPL agents/capabilities settings page')
 assert(read('src/app/index.tsx').includes("DesktopController"), 'candidate must reuse official Hermes Desktop app shell')
 assert(read('src/main.tsx').includes("HashRouter"), 'candidate must keep official renderer entry')
 assert(sha256('public/apple-touch-icon.png') === sha256('assets/icon.png'), 'runtime apple-touch-icon.png must match the OPL app icon')
@@ -114,6 +137,9 @@ if (requireApp) {
   assert(fs.existsSync(path.join(appPath, 'Contents/Info.plist')), 'Info.plist missing')
   const info = read(path.relative(root, path.join(appPath, 'Contents/Info.plist')))
   assert(info.includes('One Person Lab Hermes Candidate'), 'Info.plist must contain OPL product name')
+  assert(info.includes('CFBundleExecutable') && info.includes('One Person Lab Hermes Candidate'), 'Info.plist must use the OPL executable name')
+  assert(fs.existsSync(path.join(appPath, 'Contents/MacOS/One Person Lab Hermes Candidate')), 'packaged app must include the OPL named executable')
+  assert(!fs.existsSync(path.join(appPath, 'Contents/MacOS/Electron')), 'packaged app must not expose the legacy Electron executable name')
   const packagedAppRoot = path.join(appPath, 'Contents/Resources/app')
   assert(fs.existsSync(path.join(packagedAppRoot, 'electron/opl-defaults.cjs')), 'packaged app must include OPL defaults seed')
   const packagedBootstrap = fs.readFileSync(path.join(packagedAppRoot, 'electron/opl-bootstrap-runner.cjs'), 'utf8')

@@ -51,6 +51,9 @@ export type GatewayEventPayload = {
   branch?: string
   credential_warning?: string
   personality?: string
+  purpose_id?: string
+  receipt?: unknown
+  route?: unknown
   usage?: Partial<UsageStats>
   // clarify.request
   request_id?: string

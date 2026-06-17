@@ -15,15 +15,14 @@ import {
   Activity,
   Archive,
   BarChart3,
+  Brain,
   ChevronLeft,
   ChevronRight,
   Clock,
   Cpu,
   Download,
-  Globe,
   type IconComponent,
   Info,
-  KeyRound,
   MessageCircle,
   Monitor,
   Moon,
@@ -31,7 +30,6 @@ import {
   Palette,
   Plus,
   Settings,
-  Settings2,
   Sun,
   Terminal,
   Users,
@@ -131,11 +129,9 @@ const toSessionEntry = (session: SessionRow): SessionEntry => ({
 })
 
 type NonConfigSettingsLabel =
+  | 'agentsCapabilities'
   | 'about'
   | 'archivedChats'
-  | 'gateway'
-  | 'keysSettings'
-  | 'keysTools'
   | 'mcp'
   | 'providers'
 
@@ -151,18 +147,11 @@ const NON_CONFIG_SETTINGS: ReadonlyArray<{
     labelKey: 'providers',
     tab: 'providers'
   },
-  { icon: Globe, keywords: ['connection', 'messaging'], labelKey: 'gateway', tab: 'gateway' },
   {
-    icon: KeyRound,
-    keywords: ['api', 'secrets', 'tokens', 'credentials', 'browser', 'search'],
-    labelKey: 'keysTools',
-    tab: 'keys&kview=tools'
-  },
-  {
-    icon: Settings2,
-    keywords: ['gateway', 'proxy', 'server', 'webhook', 'env'],
-    labelKey: 'keysSettings',
-    tab: 'keys&kview=settings'
+    icon: Brain,
+    keywords: ['agents', 'capabilities', 'mas', 'mag', 'rca', 'research', 'grant', 'deck'],
+    labelKey: 'agentsCapabilities',
+    tab: 'agents'
   },
   { icon: Wrench, keywords: ['servers', 'tools'], labelKey: 'mcp', tab: 'mcp' },
   { icon: Archive, keywords: ['history', 'archived'], labelKey: 'archivedChats', tab: 'sessions' },

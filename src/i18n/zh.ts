@@ -270,6 +270,7 @@ export const zh: Translations = {
       apiKeys: '工具与密钥',
       keysTools: '工具',
       keysSettings: '设置',
+      agentsCapabilities: '智能体与能力',
       mcp: 'MCP',
       archivedChats: '已归档对话',
       about: '关于',
@@ -603,6 +604,8 @@ export const zh: Translations = {
       loading: '正在加载 One Person Lab 配置...',
       emptyTitle: '无可配置项',
       emptyDesc: '此分区没有可调整的设置。',
+      emptySectionTitle: section => `${section} 由系统管理`,
+      emptySectionDesc: '此能力在当前候选版本中由 One Person Lab / Codex 管理，或暂不需要用户配置。',
       failedLoad: '设置加载失败',
       autosaveFailed: '自动保存失败',
       imported: '配置已导入',
@@ -697,7 +700,7 @@ export const zh: Translations = {
     keys: {
       loading: '正在加载 API 密钥和凭据...',
       failedLoad: 'API 密钥加载失败',
-      empty: '此类别暂时没有配置项。'
+      empty: '此能力在当前候选版本中由 One Person Lab / Codex 管理，或暂不需要用户配置。'
     },
     mcp: {
       loading: '正在加载 MCP 服务器...',
@@ -719,7 +722,7 @@ export const zh: Translations = {
       reload: '重新加载 MCP',
       reloading: '重新加载中...',
       emptyTitle: '没有 MCP 服务器',
-      emptyDesc: '添加 stdio 或 HTTP 服务器以暴露 MCP 工具。',
+      emptyDesc: '默认 chat-first 使用不需要手动配置 MCP；需要时由 One Person Lab 或 Codex 工作流接入。',
       disabled: '已禁用',
       editServer: '编辑服务器',
       name: '名称',
@@ -775,6 +778,24 @@ export const zh: Translations = {
       failedRemove: provider => `无法移除 ${provider}`,
       noProviderKeys: '没有可配置的模型访问密钥。',
       loading: '正在加载模型访问配置...'
+    },
+    agentsCapabilities: {
+      loading: '正在加载智能体与能力...',
+      failedLoad: '智能体与能力加载失败',
+      title: '智能体与能力',
+      intro:
+        '这些入口把普通对话路由到 One Person Lab 的 owner surface。GUI 只做路由与回执展示，不写入 MAS/MAG/RCA 的领域真相、成果正文或质量结论。',
+      emptyTitle: '暂无可用智能体路由',
+      emptyDesc: '当前候选版本没有从 OPL gateway 读到 purpose route catalog。',
+      owner: 'Owner surface',
+      project: '项目',
+      action: '准备动作',
+      readback: '读回',
+      authority: '权限边界',
+      aliases: '触发词',
+      routeReady: '可路由',
+      routeBoundary: 'GUI 只负责路由，不接管领域权威',
+      noDomainTruth: '不写领域真相 / 不创建 owner receipt / 不声明 domain ready'
     },
     sessions: {
       loading: '正在加载已归档会话…',

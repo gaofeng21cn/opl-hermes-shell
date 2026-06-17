@@ -28,6 +28,7 @@ import type {
   OAuthProvidersResponse,
   OAuthStartResponse,
   OAuthSubmitResponse,
+  OplPurposeRouteCatalog,
   PaginatedSessions,
   ProfileCreatePayload,
   ProfileSetupCommand,
@@ -82,6 +83,8 @@ export type {
   ModelInfoResponse,
   ModelOptionProvider,
   ModelOptionsResponse,
+  OplPurposeRoute,
+  OplPurposeRouteCatalog,
   PaginatedSessions,
   ProfileCreatePayload,
   ProfileInfo,
@@ -327,6 +330,13 @@ export function getHermesConfigSchema(): Promise<ConfigSchemaResponse> {
   return window.hermesDesktop.api<ConfigSchemaResponse>({
     ...profileScoped(),
     path: '/api/config/schema'
+  })
+}
+
+export function getOplPurposeRoutes(): Promise<OplPurposeRouteCatalog> {
+  return window.hermesDesktop.api<OplPurposeRouteCatalog>({
+    ...profileScoped(),
+    path: '/api/opl/purpose-routes'
   })
 }
 

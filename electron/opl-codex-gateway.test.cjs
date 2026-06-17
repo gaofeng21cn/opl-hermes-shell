@@ -49,6 +49,69 @@ async function withGateway(fn, options = {}) {
   }
 }
 
+function createOplCommandFixture(overrides = {}) {
+  const calls = []
+  const runner = async args => {
+    calls.push(args)
+    const command = args.join(' ')
+    if (command === 'app state --profile fast --json') {
+      const body = overrides.appState || {
+        version: 'g2',
+        app_state: {
+          surface_kind: 'opl_app_state.v1',
+          runtime_source: { action_surface: 'opl app action execute' }
+        }
+      }
+      return { code: 0, stdout: JSON.stringify(body), stderr: '' }
+    }
+    if (command === 'start --project medautoscience --json') {
+      const body = overrides.masStart || {
+        version: 'g2',
+        product_entry_start: {
+          project_id: 'medautoscience',
+          selected_mode_id: 'open_product_entry',
+          selected_mode: { command: 'opl app product-entry-status --agent med-autoscience --format json' }
+        }
+      }
+      return { code: 0, stdout: JSON.stringify(body), stderr: '' }
+    }
+    if (command === 'start --project medautogrant --json') {
+      const body = overrides.magStart || {
+        version: 'g2',
+        error: {
+          code: 'cli_usage_error',
+          message: 'The requested project does not currently expose a resolved product_entry_start surface.'
+        }
+      }
+      return { code: 2, stdout: JSON.stringify(body), stderr: '' }
+    }
+    if (command === 'start --project redcube --json') {
+      const body = overrides.rcaStart || {
+        version: 'g2',
+        error: {
+          code: 'cli_usage_error',
+          message: 'workspace_missing'
+        }
+      }
+      return { code: 2, stdout: JSON.stringify(body), stderr: '' }
+    }
+    if (command.startsWith('app action execute --action workspace_ensure ')) {
+      const body = overrides.workspaceEnsure || {
+        version: 'g2',
+        app_action_execution: {
+          action_id: 'workspace_ensure',
+          dry_run: true,
+          authority_boundary: { shell: 'implementation_adapter_only', can_write_domain_truth: false }
+        }
+      }
+      return { code: 0, stdout: JSON.stringify(body), stderr: '' }
+    }
+    throw new Error(`unexpected OPL fixture command: ${command}`)
+  }
+  runner.calls = calls
+  return runner
+}
+
 async function getJson(baseUrl, path) {
   const response = await fetch(`${baseUrl}${path}`)
   assert.equal(response.ok, true, `${path} should return 2xx`)
@@ -245,6 +308,10 @@ test('OPL Codex gateway scope helper documents executor bridge ownership', () =>
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/config'), true)
   assert.equal(scope.upstreamHermesBackendOwns.includes('profiles'), true)
   assert.equal(scope.upstreamHermesBackendOwns.includes('command catalog'), true)
+  assert.equal(scope.purposeRoutes.some(route => route.purpose_id === 'mas'), true)
+  assert.equal(scope.purposeRoutes.some(route => route.purpose_id === 'mag'), true)
+  assert.equal(scope.purposeRoutes.some(route => route.purpose_id === 'rca'), true)
+  assert.equal(scope.purposeRoutes.some(route => route.purpose_id === 'opl'), true)
 })
 
 test('OPL Codex gateway returns renderer-safe official UI bootstrap REST shapes', async () => {
@@ -417,6 +484,106 @@ test('OPL Codex gateway returns renderer-safe attachment RPC shapes', async () =
   })
 })
 
+test('OPL Codex gateway exposes MAS/MAG/RCA/OPL purpose route catalog', async () => {
+  await withGateway(async descriptor => {
+    const catalog = await getJson(descriptor.baseUrl, '/api/opl/purpose-routes')
+    assert.equal(catalog.surface_kind, 'opl_hermes_purpose_route_catalog.v1')
+    assert.equal(catalog.authority_boundary.creates_second_truth_source, false)
+
+    const byId = new Map(catalog.routes.map(route => [route.purpose_id, route]))
+    for (const id of ['mas', 'mag', 'rca', 'opl']) {
+      assert.ok(byId.has(id), `missing ${id} route`)
+      assert.equal(byId.get(id).owner_surface.includes('opl '), true)
+      assert.equal(byId.get(id).codex_prompt_contract.includes('Do not'), true)
+    }
+
+    const rpcCatalog = await requestRpc(descriptor.wsUrl, 'purpose.routes')
+    assert.equal(rpcCatalog.routes.length, catalog.routes.length)
+  })
+})
+
+test('OPL Codex gateway exposes smoke WebSocket descriptor only when explicitly enabled', async () => {
+  await withGateway(async descriptor => {
+    const blocked = await requestJson(descriptor.baseUrl, '/api/smoke/connection')
+    assert.equal(blocked.response.status, 404)
+  })
+
+  const previous = process.env.OPL_HERMES_SMOKE_EXPOSE_DESCRIPTOR
+  process.env.OPL_HERMES_SMOKE_EXPOSE_DESCRIPTOR = '1'
+  try {
+    await withGateway(async descriptor => {
+      const smoke = await getJson(descriptor.baseUrl, '/api/smoke/connection')
+      assert.equal(smoke.surface_kind, 'opl_hermes_smoke_connection.v1')
+      assert.equal(smoke.authMode, 'token')
+      assert.equal(smoke.wsUrl, descriptor.wsUrl)
+    })
+  } finally {
+    if (previous === undefined) {
+      delete process.env.OPL_HERMES_SMOKE_EXPOSE_DESCRIPTOR
+    } else {
+      process.env.OPL_HERMES_SMOKE_EXPOSE_DESCRIPTOR = previous
+    }
+  }
+})
+
+test('OPL Codex gateway resolves purpose routes through OPL owner surfaces', async () => {
+  const runOplCommand = createOplCommandFixture()
+  await withGateway(
+    async descriptor => {
+      const mas = await requestRpc(descriptor.wsUrl, 'purpose.route.resolve', { purpose: 'mas' })
+      assert.equal(mas.ok, true)
+      assert.equal(mas.route.project_id, 'medautoscience')
+      assert.equal(mas.receipt.status, 'route_readback_ready')
+      assert.equal(mas.receipt.app_action_dry_run.ok, true)
+      assert.equal(mas.receipt.start_readback.ok, true)
+
+      const mag = await requestRpc(descriptor.wsUrl, 'purpose.route.resolve', { agent_id: 'mag' })
+      assert.equal(mag.ok, true)
+      assert.equal(mag.route.project_id, 'medautogrant')
+      assert.equal(mag.receipt.status, 'route_readback_with_blockers')
+      assert.equal(mag.receipt.start_readback.ok, false)
+
+      const rca = await requestRpc(descriptor.wsUrl, 'purpose.route.resolve', { project_id: 'redcube' })
+      assert.equal(rca.ok, true)
+      assert.equal(rca.route.project_id, 'redcube')
+      assert.equal(rca.receipt.status, 'route_readback_with_blockers')
+
+      const opl = await requestRpc(descriptor.wsUrl, 'purpose.route.resolve', { purpose: 'opl' })
+      assert.equal(opl.ok, true)
+      assert.equal(opl.route.project_id, 'one-person-lab')
+      assert.equal(opl.receipt.start_readback.command, 'opl app state --profile fast --json')
+    },
+    { runOplCommand }
+  )
+
+  assert.ok(runOplCommand.calls.some(args => args.join(' ') === 'start --project medautoscience --json'))
+  assert.ok(runOplCommand.calls.some(args => args.join(' ') === 'start --project medautogrant --json'))
+  assert.ok(runOplCommand.calls.some(args => args.join(' ') === 'start --project redcube --json'))
+  assert.ok(runOplCommand.calls.some(args => args.join(' ') === 'app state --profile fast --json'))
+})
+
+test('OPL Codex gateway starts without blocking on Codex or OPL purpose route probes', async () => {
+  const runOplCommand = async args => {
+    throw new Error(`startup should not call OPL: ${args.join(' ')}`)
+  }
+  const appServerClient = {
+    stop() {
+      // start() should not touch the Codex app-server client.
+    },
+    startThread() {
+      throw new Error('startup should not start Codex threads')
+    }
+  }
+
+  await withGateway(
+    async descriptor => {
+      const status = await getJson(descriptor.baseUrl, '/api/status')
+      assert.equal(status.backend, 'codex-app-server-adapter')
+    },
+    { appServerClient, runOplCommand }
+  )
+})
+
 test('OPL Codex gateway streams message.delta text payloads', async () => {
   const originalPath = process.env.PATH
   const originalFixtureLog = process.env.OPL_CODEX_FIXTURE_LOG
@@ -455,6 +622,7 @@ test('OPL Codex gateway streams message.delta text payloads', async () => {
 
       const delta = frames.find(frame => frame.params?.type === 'message.delta')
       assert.equal(delta?.params?.payload?.text, 'fixture codex response')
+      assert.ok(frames.some(frame => frame.params?.type === 'tool.event'))
       const fixtureCalls = require('node:fs')
         .readFileSync(fixtureLog, 'utf8')
         .trim()
@@ -469,6 +637,144 @@ test('OPL Codex gateway streams message.delta text payloads', async () => {
       assert.equal(fixtureCalls[2].params.threadId, 'thread-fixture')
       socket.close()
     })
+  } finally {
+    process.env.PATH = originalPath
+    if (originalFixtureLog === undefined) {
+      delete process.env.OPL_CODEX_FIXTURE_LOG
+    } else {
+      process.env.OPL_CODEX_FIXTURE_LOG = originalFixtureLog
+    }
+    require('node:fs').rmSync(fixtureLog, { force: true })
+  }
+})
+
+test('OPL Codex gateway attaches purpose route receipts and errors to prompt.submit events', async () => {
+  const originalPath = process.env.PATH
+  const originalFixtureLog = process.env.OPL_CODEX_FIXTURE_LOG
+  const fixtureBin = require('node:path').join(__dirname, '..', 'scripts', 'fixtures', 'codex-bin')
+  const fixtureLog = require('node:path').join(require('node:os').tmpdir(), `opl-codex-purpose-${process.pid}-${Date.now()}.jsonl`)
+  const runOplCommand = createOplCommandFixture()
+  process.env.PATH = `${fixtureBin}${require('node:path').delimiter}${originalPath || ''}`
+  process.env.OPL_CODEX_FIXTURE_LOG = fixtureLog
+
+  try {
+    await withGateway(
+      async descriptor => {
+        const socket = await openGatewaySocket(descriptor.wsUrl)
+        const frames = []
+
+        socket.addEventListener('message', event => {
+          frames.push(JSON.parse(String(event.data)))
+        })
+
+        const session = await requestRpcOnSocket(socket, 'session.create', { purpose: 'mag' })
+        await requestRpcOnSocket(socket, 'prompt.submit', {
+          session_id: session.session_id,
+          purpose: 'mag',
+          text: '帮我准备基金申请路线'
+        })
+
+        await new Promise((resolve, reject) => {
+          const started = Date.now()
+          const timer = setInterval(() => {
+            if (frames.some(frame => frame.params?.type === 'message.complete')) {
+              clearInterval(timer)
+              resolve()
+            } else if (Date.now() - started > 3000) {
+              clearInterval(timer)
+              reject(new Error('timeout waiting for purpose routed message.complete'))
+            }
+          }, 20)
+        })
+
+        const routeSelected = frames.find(frame => frame.params?.type === 'route.selected')
+        assert.equal(routeSelected?.params?.payload?.route?.purpose_id, 'mag')
+        const routeError = frames.find(frame => frame.params?.type === 'route.error')
+        assert.equal(routeError?.params?.payload?.receipt?.purpose_id, 'mag')
+        assert.equal(routeError?.params?.payload?.receipt?.status, 'route_readback_with_blockers')
+        assert.ok(routeError.params.payload.receipt.errors.length > 0)
+
+        const fixtureCalls = require('node:fs')
+          .readFileSync(fixtureLog, 'utf8')
+          .trim()
+          .split('\n')
+          .map(line => JSON.parse(line))
+        const turnStart = fixtureCalls.find(call => call.method === 'turn/start')
+        const promptText = turnStart.params.input[0].text
+        assert.match(promptText, /OPL purpose route receipt/)
+        assert.match(promptText, /Med Auto Grant/)
+        assert.match(promptText, /Do not write MAG truth/)
+        socket.close()
+      },
+      { runOplCommand }
+    )
+  } finally {
+    process.env.PATH = originalPath
+    if (originalFixtureLog === undefined) {
+      delete process.env.OPL_CODEX_FIXTURE_LOG
+    } else {
+      process.env.OPL_CODEX_FIXTURE_LOG = originalFixtureLog
+    }
+    require('node:fs').rmSync(fixtureLog, { force: true })
+  }
+})
+
+test('OPL Codex gateway auto-routes ordinary Chinese research prompts to MAS', async () => {
+  const originalPath = process.env.PATH
+  const originalFixtureLog = process.env.OPL_CODEX_FIXTURE_LOG
+  const fixtureBin = require('node:path').join(__dirname, '..', 'scripts', 'fixtures', 'codex-bin')
+  const fixtureLog = require('node:path').join(require('node:os').tmpdir(), `opl-codex-mas-auto-${process.pid}-${Date.now()}.jsonl`)
+  const runOplCommand = createOplCommandFixture()
+  process.env.PATH = `${fixtureBin}${require('node:path').delimiter}${originalPath || ''}`
+  process.env.OPL_CODEX_FIXTURE_LOG = fixtureLog
+
+  try {
+    await withGateway(
+      async descriptor => {
+        const socket = await openGatewaySocket(descriptor.wsUrl)
+        const frames = []
+
+        socket.addEventListener('message', event => {
+          frames.push(JSON.parse(String(event.data)))
+        })
+
+        const session = await requestRpcOnSocket(socket, 'session.create')
+        await requestRpcOnSocket(socket, 'prompt.submit', {
+          session_id: session.session_id,
+          text: '检查 MAS 糖尿病 002、003 两篇论文的进展'
+        })
+
+        await new Promise((resolve, reject) => {
+          const started = Date.now()
+          const timer = setInterval(() => {
+            if (frames.some(frame => frame.params?.type === 'message.complete')) {
+              clearInterval(timer)
+              resolve()
+            } else if (Date.now() - started > 3000) {
+              clearInterval(timer)
+              reject(new Error('timeout waiting for auto-routed message.complete'))
+            }
+          }, 20)
+        })
+
+        const routeReceipt = frames.find(frame => frame.params?.type === 'route.receipt')
+        assert.equal(routeReceipt?.params?.payload?.receipt?.purpose_id, 'mas')
+        assert.equal(routeReceipt?.params?.payload?.receipt?.status, 'route_readback_ready')
+
+        const fixtureCalls = require('node:fs')
+          .readFileSync(fixtureLog, 'utf8')
+          .trim()
+          .split('\n')
+          .map(line => JSON.parse(line))
+        const turnStart = fixtureCalls.find(call => call.method === 'turn/start')
+        const promptText = turnStart.params.input[0].text
+        assert.match(promptText, /OPL purpose route receipt/)
+        assert.match(promptText, /Med Auto Science/)
+        assert.match(promptText, /Do not write MAS truth/)
+        socket.close()
+      },
+      { runOplCommand }
+    )
   } finally {
     process.env.PATH = originalPath
     if (originalFixtureLog === undefined) {
