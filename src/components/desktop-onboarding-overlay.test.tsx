@@ -73,7 +73,7 @@ describe('onboarding Picker', () => {
       </I18nProvider>
     )
 
-    expect(screen.getByText('OPL 模型访问')).toBeTruthy()
+    expect(screen.getByText('One Person Lab 模型访问')).toBeTruthy()
     expect(screen.getByText('默认模型访问')).toBeTruthy()
     expect(screen.getByText(/为 One Person Lab 默认 Codex 适配器配置 API 密钥/)).toBeTruthy()
     expect(screen.getByPlaceholderText('粘贴 API 密钥')).toBeTruthy()

@@ -57,8 +57,8 @@ test('existingDirectories filters absent OPL skill directories', () => {
 test('defaultLanguageFromLocale maps supported system locales', () => {
   assert.equal(defaultLanguageFromLocale('zh-CN'), 'zh')
   assert.equal(defaultLanguageFromLocale('zh_Hans_CN.UTF-8'), 'zh')
-  assert.equal(defaultLanguageFromLocale('zh-TW'), 'zh-hant')
-  assert.equal(defaultLanguageFromLocale('ja-JP'), 'ja')
+  assert.equal(defaultLanguageFromLocale('zh-TW'), 'zh')
+  assert.equal(defaultLanguageFromLocale('ja-JP'), 'en')
   assert.equal(defaultLanguageFromLocale('en-US'), 'en')
   assert.equal(defaultLanguageFromLocale('de-DE'), 'en')
 })

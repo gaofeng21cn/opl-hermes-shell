@@ -1609,7 +1609,8 @@ export const zh: Translations = {
     finishingTitle: '正在收尾',
     failedDesc:
       '某个初始化步骤失败。请查看下面的详情或 desktop 日志中的完整记录；这里不会自动安装 Hermes Agent。',
-    activeDesc: '这是一次性初始化。One Person Lab 正在检查本机 OPL、Codex CLI、必要模块和模型访问配置。',
+    activeDesc:
+      '这是一次性本机初始化。One Person Lab 正在检查本机命令行工具和必要组件。模型访问会在初始化后单独配置。',
     progress: (completed, total) => `${completed}/${total} 个步骤已完成`,
     currentStage: stage => ` -- 当前：${stage}`,
     fetchingManifest: '正在读取初始化步骤...',
@@ -1627,8 +1628,8 @@ export const zh: Translations = {
   },
 
   onboarding: {
-    headerTitle: '配置 OPL 模型访问',
-    headerDesc: '当前未检测到可用的 OPL 模型访问配置。请输入 API 密钥；如果本机 Codex 已完成配置，应用会自动继续。',
+    headerTitle: '配置 One Person Lab 模型访问',
+    headerDesc: '当前未检测到可用的 One Person Lab 模型访问配置。请输入 API 密钥；如果本机 Codex 已完成配置，应用会自动继续。',
     preparingInstall: 'One Person Lab 正在完成本机初始化。首次运行可能需要稍等。',
     starting: '正在启动 One Person Lab…',
     lookingUpProviders: '正在读取模型访问配置...',
@@ -1643,7 +1644,7 @@ export const zh: Translations = {
     apiKeyOptions: {
       openrouter: { short: '一个密钥，多个模型', description: '用一个密钥访问数百个模型。适合新安装的默认选择。' },
       gflabtoken: {
-        name: 'OPL 模型访问',
+        name: 'One Person Lab 模型访问',
         short: '默认模型访问',
         description: '为 One Person Lab 默认 Codex 适配器配置 API 密钥。该密钥可由 gflabtoken 提供。'
       },

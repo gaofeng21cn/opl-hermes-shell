@@ -290,6 +290,7 @@ async function runLaunch({ apiKeyPresent, name, sandbox, expectBlockingInitializ
         `${name}: missing key route expectation mismatch`
       )
       assert(text.includes('"needsApiKey":true') || text.includes('"api_key_present":false'), `${name}: missing-key state was not visible`)
+      assert(!text.includes('[opl-maintenance]'), `${name}: background maintenance started before model access was configured`)
     }
     return { calls: newCalls, logPath, sandbox }
   } finally {

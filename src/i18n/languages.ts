@@ -14,25 +14,12 @@ export const LOCALE_OPTIONS = [
     name: '简体中文',
     englishName: 'Simplified Chinese',
     configValue: 'zh'
-  },
-  {
-    id: 'zh-hant',
-    name: '繁體中文',
-    englishName: 'Traditional Chinese',
-    configValue: 'zh-hant'
-  },
-  {
-    id: 'ja',
-    name: '日本語',
-    englishName: 'Japanese',
-    configValue: 'ja'
   }
 ] as const satisfies readonly { configValue: string; englishName: string; id: Locale; name: string }[]
 
 // `name` is the endonym (native name) shown in the picker so users recognize
 // their language regardless of the current UI language. No country flags:
-// languages are not countries. `englishName` is search-only (not shown) so an
-// English speaker can type "japanese"/"traditional" to filter the list.
+// languages are not countries. `englishName` is search-only (not shown).
 export const LOCALE_META: Record<Locale, { name: string; englishName: string }> = Object.fromEntries(
   LOCALE_OPTIONS.map(locale => [locale.id, { name: locale.name, englishName: locale.englishName }])
 ) as Record<Locale, { name: string; englishName: string }>
@@ -48,21 +35,18 @@ const LOCALE_ALIASES: Record<string, Locale> = {
   zh_hans: 'zh',
   'zh-hans-cn': 'zh',
   zh_hans_cn: 'zh',
-  'zh-tw': 'zh-hant',
-  zh_tw: 'zh-hant',
-  'zh-hk': 'zh-hant',
-  zh_hk: 'zh-hant',
-  'zh-mo': 'zh-hant',
-  zh_mo: 'zh-hant',
-  'zh-hant': 'zh-hant',
-  zh_hant: 'zh-hant',
-  'zh-hant-tw': 'zh-hant',
-  zh_hant_tw: 'zh-hant',
-  'zh-hant-hk': 'zh-hant',
-  zh_hant_hk: 'zh-hant',
-  ja: 'ja',
-  'ja-jp': 'ja',
-  ja_jp: 'ja'
+  'zh-tw': 'zh',
+  zh_tw: 'zh',
+  'zh-hk': 'zh',
+  zh_hk: 'zh',
+  'zh-mo': 'zh',
+  zh_mo: 'zh',
+  'zh-hant': 'zh',
+  zh_hant: 'zh',
+  'zh-hant-tw': 'zh',
+  zh_hant_tw: 'zh',
+  'zh-hant-hk': 'zh',
+  zh_hant_hk: 'zh'
 }
 
 export function isLocale(value: unknown): value is Locale {

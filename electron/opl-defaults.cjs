@@ -21,11 +21,7 @@ function existingDirectories(paths) {
 function defaultLanguageFromLocale(locale) {
   const value = String(locale || '').trim().toLowerCase().replace(/_/g, '-')
   if (!value) return 'en'
-  if (value === 'zh' || value.startsWith('zh-cn') || value.startsWith('zh-hans')) return 'zh'
-  if (value.startsWith('zh-tw') || value.startsWith('zh-hk') || value.startsWith('zh-mo') || value.startsWith('zh-hant')) {
-    return 'zh-hant'
-  }
-  if (value === 'ja' || value.startsWith('ja-')) return 'ja'
+  if (value === 'zh' || value.startsWith('zh-')) return 'zh'
   return 'en'
 }
 

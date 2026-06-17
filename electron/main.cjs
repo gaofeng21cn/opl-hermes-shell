@@ -135,16 +135,7 @@ function hiddenWindowsChildOptions(options = {}) {
 function oplDefaultLanguage() {
   const locale = (app.getLocale && app.getLocale()) || process.env.LANG || 'en-US'
   const normalized = String(locale).trim().toLowerCase().replace(/_/g, '-')
-  if (normalized === 'zh' || normalized.startsWith('zh-cn') || normalized.startsWith('zh-hans')) return 'zh'
-  if (
-    normalized.startsWith('zh-tw') ||
-    normalized.startsWith('zh-hk') ||
-    normalized.startsWith('zh-mo') ||
-    normalized.startsWith('zh-hant')
-  ) {
-    return 'zh-hant'
-  }
-  if (normalized === 'ja' || normalized.startsWith('ja-')) return 'ja'
+  if (normalized === 'zh' || normalized.startsWith('zh-')) return 'zh'
   return 'en'
 }
 
@@ -5055,7 +5046,11 @@ async function startHermes() {
         running: true,
         error: null
       })
-      startOplMaintenanceInBackground()
+      if (backend.oplBootstrap?.needsApiKey) {
+        rememberLog('[opl-bootstrap] deferred OPL startup maintenance until model access is configured')
+      } else {
+        startOplMaintenanceInBackground()
+      }
       return {
         ...descriptor,
         logs: hermesLog.slice(-80),

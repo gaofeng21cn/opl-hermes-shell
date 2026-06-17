@@ -1425,7 +1425,7 @@ export const en: Translations = {
     failedDesc:
       'One of the initialization steps failed. Check the details below or the desktop log for the full transcript. This path does not install Hermes Agent.',
     activeDesc:
-      'This is a one-time initialization. One Person Lab is checking local OPL, Codex CLI, required modules, and model access.',
+      'This is a one-time local initialization. One Person Lab is checking local CLI tools and required components. Model access is configured separately after this step.',
     progress: (completed, total) => `${completed} of ${total} steps complete`,
     currentStage: stage => ` -- now: ${stage}`,
     fetchingManifest: 'Reading initialization steps...',
@@ -1443,9 +1443,9 @@ export const en: Translations = {
   },
 
   onboarding: {
-    headerTitle: 'Configure OPL model access',
+    headerTitle: 'Configure One Person Lab model access',
     headerDesc:
-      'No usable OPL model access configuration was detected. Enter an API key, or let the app continue automatically if local Codex is already configured.',
+      'No usable One Person Lab model access configuration was detected. Enter an API key, or let the app continue automatically if local Codex is already configured.',
     preparingInstall: 'One Person Lab is finishing local initialization. First run can take a moment.',
     starting: 'Starting One Person Lab...',
     lookingUpProviders: 'Reading model access configuration...',
@@ -1463,7 +1463,7 @@ export const en: Translations = {
         description: 'Hosts hundreds of models behind a single key. Good default for new installs.'
       },
       gflabtoken: {
-        name: 'OPL Model Access',
+        name: 'One Person Lab model access',
         short: 'Default model access',
         description: 'Configure the API key for the default One Person Lab Codex adapter. This key may be provided by gflabtoken.'
       },
