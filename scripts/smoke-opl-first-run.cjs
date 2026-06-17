@@ -558,12 +558,31 @@ async function exerciseGatewayConversation({ wsUrl, exerciseRoutes, name }) {
       assert(routeFrame.params.payload.receipt.status === 'route_readback_ready', `${name}: MAS route was not ready in fixture`)
     }
 
+    const routeReadbacks = {}
+    if (exerciseRoutes) {
+      for (const purpose of ['mag', 'rca']) {
+        const resolved = await requestRpcOnSocket(socket, 'purpose.route.resolve', { purpose })
+        assert(resolved.ok === true, `${name}: ${purpose} route did not resolve`)
+        assert(resolved.route.purpose_id === purpose, `${name}: ${purpose} route id mismatch`)
+        assert(
+          resolved.receipt.status === 'route_readback_ready' || resolved.receipt.status === 'route_readback_with_blockers',
+          `${name}: ${purpose} route status was not explicit`
+        )
+        routeReadbacks[purpose] = {
+          event_status: resolved.receipt.status,
+          error_count: resolved.receipt.errors.length,
+          project_id: resolved.receipt.project_id
+        }
+      }
+    }
+
     return {
       session_id: session.session_id,
       message_complete: true,
       assistant_delta: assistantDelta,
       route_event_type: routeFrame?.params?.type || null,
       route_status: routeFrame?.params?.payload?.receipt?.status || null,
+      route_readbacks: routeReadbacks,
       frame_count: frames.length
     }
   } finally {

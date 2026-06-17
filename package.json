@@ -48,6 +48,7 @@
     "package": "node scripts/package-opl-candidate-app.cjs",
     "pack:opl": "node scripts/package-opl-candidate-app.cjs",
     "smoke:opl-first-run": "node scripts/smoke-opl-first-run.cjs",
+    "smoke:settings-visual": "node scripts/smoke-settings-visual.cjs",
     "validate:candidate": "node scripts/validate-hermes-codex-candidate.cjs"
   },
   "dependencies": {

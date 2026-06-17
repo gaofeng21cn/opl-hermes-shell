@@ -61,6 +61,8 @@ assert(fs.existsSync(path.join(root, 'electron/opl-bootstrap-runner.cjs')), 'can
 assert(fs.existsSync(path.join(root, 'electron/opl-startup-marker.cjs')), 'candidate must include electron/opl-startup-marker.cjs')
 assert(fs.existsSync(path.join(root, 'electron/opl-bootstrap-runner.test.cjs')), 'candidate must include electron/opl-bootstrap-runner.test.cjs')
 assert(fs.existsSync(path.join(root, 'electron/opl-codex-gateway.test.cjs')), 'candidate must include electron/opl-codex-gateway.test.cjs')
+assert(fs.existsSync(path.join(root, 'scripts/smoke-settings-visual.cjs')), 'candidate must include packaged Settings visual smoke')
+assert(JSON.stringify(pkg.scripts || {}).includes('smoke:settings-visual'), 'package scripts must expose smoke:settings-visual')
 assert(oplBootstrapRunner.includes("require('./opl-startup-marker.cjs')"), 'OPL bootstrap runner must use the OPL startup marker')
 assert(oplBootstrapRunner.includes('classifyStartupMarker'), 'OPL bootstrap runner must classify startup marker before full initialize')
 assert(oplBootstrapRunner.includes("startupMode: 'lightweight'"), 'OPL bootstrap runner must support lightweight startup')
@@ -170,6 +172,20 @@ if (requireApp) {
   const packagedIconHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(packagedAppRoot, 'assets/icon.png'))).digest('hex')
   const packagedAppleIconHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(packagedAppRoot, 'public/apple-touch-icon.png'))).digest('hex')
   assert(packagedIconHash === packagedAppleIconHash, 'packaged runtime apple-touch-icon.png must match the OPL app icon')
+  const settingsVisualSummaryPath = path.join(root, 'out/smoke-settings-visual/settings-visual-summary.json')
+  assert(fs.existsSync(settingsVisualSummaryPath), 'packaged Settings visual smoke summary missing; run npm run smoke:settings-visual -- --out out/smoke-settings-visual')
+  const settingsVisualSummary = JSON.parse(fs.readFileSync(settingsVisualSummaryPath, 'utf8'))
+  assert(settingsVisualSummary.status === 'opl_hermes_settings_visual_smoke_passed', 'packaged Settings visual smoke must pass')
+  assert(settingsVisualSummary.assertions?.home_nonblank === true, 'packaged Settings visual smoke must prove a nonblank home')
+  assert(settingsVisualSummary.assertions?.model_access_gflabtoken_only === true, 'packaged Settings visual smoke must prove gflabtoken-only model access')
+  assert(settingsVisualSummary.assertions?.agents_capabilities_routes_visible === true, 'packaged Settings visual smoke must prove agents/capabilities routes are visible')
+  assert(settingsVisualSummary.assertions?.forbidden_provider_controls_hidden === true, 'packaged Settings visual smoke must prove forbidden provider controls are hidden')
+  for (const screenshot of Object.values(settingsVisualSummary.screenshots || {})) {
+    assert(screenshot?.path && fs.existsSync(screenshot.path), `packaged Settings visual smoke screenshot missing: ${screenshot?.path}`)
+    assert(Number(screenshot.bytes || 0) > 1_000, `packaged Settings visual smoke screenshot too small: ${screenshot.path}`)
+    assert(Number(screenshot.width || 0) >= 1_000, `packaged Settings visual smoke screenshot width too small: ${screenshot.path}`)
+    assert(Number(screenshot.height || 0) >= 700, `packaged Settings visual smoke screenshot height too small: ${screenshot.path}`)
+  }
 }
 
 console.log(JSON.stringify({ status: 'hermes_codex_candidate_valid', require_app: requireApp }, null, 2))

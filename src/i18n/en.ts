@@ -372,7 +372,7 @@ export const en: Translations = {
     fieldLabels: FIELD_LABELS,
     fieldDescriptions: FIELD_DESCRIPTIONS,
     about: {
-      heading: 'Hermes Desktop',
+      heading: 'One Person Lab Hermes Candidate',
       version: value => `Version ${value}`,
       versionUnavailable: 'Version unavailable',
       updates: 'Updates',
@@ -390,7 +390,7 @@ export const en: Translations = {
       justNowSuffix: ' · just now',
       automaticUpdates: 'Automatic updates',
       automaticUpdatesDesc:
-        'Hermes checks for updates automatically in the background and lets you know when one is ready.',
+        'One Person Lab checks this candidate shell for updates in the background and lets you know when one is ready.',
       branchCommit: (branch, commit) => `Branch ${branch} · Commit ${commit}`,
       never: 'never',
       justNow: 'just now',
