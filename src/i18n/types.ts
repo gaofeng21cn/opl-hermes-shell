@@ -197,6 +197,20 @@ export interface Translations {
     noResults: string
   }
 
+  intro: {
+    body: string
+    routeAria: string
+    routes: Record<
+      'mag' | 'mas' | 'rca',
+      {
+        description: string
+        label: string
+        prompt: string
+        shortLabel: string
+      }
+    >
+  }
+
   settings: {
     closeSettings: string
     exportConfig: string

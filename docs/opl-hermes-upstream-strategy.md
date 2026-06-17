@@ -87,7 +87,8 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
 
 - **Branding/package identity**：产品名、bundle id、protocol scheme、图标、候选
   manifest；`public/apple-touch-icon.png` 必须与 OPL 图标同步，因为 Electron
-  启动后会用它刷新运行时 Dock icon。
+  启动后会用它刷新运行时 Dock icon。Home intro 的 wordmark 也属于 branding：
+  普通首屏必须显示 `One Person Lab`，不能继续显示 upstream `HERMES AGENT`。
 - **Official backend preservation**：`electron/main.cjs` 保留官方 Hermes backend
   resolution、first-launch bootstrap、remote backend、profile pool 和
   `hermes dashboard` API contract。候选包启动后必须先是一个功能完整的 Hermes
@@ -99,6 +100,11 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   只写日志，不阻断官方 Hermes Desktop 启动。
 - **OPL i18n 范围**：普通 UI 只维护简体中文和英文。中文系统语言统一映射到 `zh`；
   日文和其它非支持语言回退英文。不要继续增加繁体中文或日文 locale 文件。
+- **Home purpose route chips**：MAS/MAG/RCA 是 App-owned purpose route，不是独立
+  backend 选择器。Home 允许在 intro/composer 附近显示轻量 `科研/MAS`、`基金/MAG`、
+  `演示/RCA` chips；点击 chip 只把对应 route prompt 写入 composer，让下一条
+  `prompt.submit` 走现有 purpose resolver。不要把这些 chips 扩展成首页 dashboard、
+  runtime truth 面板或 domain readiness 展示。
 - **OPL startup fallback**：没有可用 Hermes runtime 且进入 OPL fallback 时，按
   App repo 的四线模型分流。每次启动只做 marker、One Person Lab CLI、Codex CLI、
   `opl app state --profile fast --json` 模型访问探测和 Codex adapter startup 的轻量

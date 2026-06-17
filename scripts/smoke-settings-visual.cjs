@@ -226,12 +226,21 @@ class Cdp {
 async function waitForTarget(port) {
   const started = Date.now()
   let lastError = ''
+  let lastTargets = []
   while (Date.now() - started < smokeTimeoutMs) {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/json`)
       if (response.ok) {
         const targets = await response.json()
-        const target = targets.find(entry => entry.type === 'page' && entry.webSocketDebuggerUrl)
+        lastTargets = targets
+        const pageTargets = targets.filter(entry => {
+          const url = String(entry.url || '')
+          return entry.type === 'page' && entry.webSocketDebuggerUrl && !url.startsWith('devtools://')
+        })
+        const target =
+          pageTargets.find(entry => /(?:dist\/index\.html|127\.0\.0\.1|localhost)/.test(String(entry.url || ''))) ||
+          pageTargets.find(entry => String(entry.url || '') && String(entry.url || '') !== 'about:blank') ||
+          pageTargets[0]
         if (target) return target
       }
     } catch (error) {
@@ -239,7 +248,9 @@ async function waitForTarget(port) {
     }
     await sleep(250)
   }
-  throw new Error(`Could not find Electron renderer CDP target on ${port}: ${lastError}`)
+  throw new Error(
+    `Could not find Electron renderer CDP target on ${port}: ${lastError}. Last targets: ${JSON.stringify(lastTargets)}`
+  )
 }
 
 async function waitForCondition(cdp, expression, label) {
@@ -278,9 +289,30 @@ function pngDimensions(filePath) {
   }
 }
 
+async function normalizeCaptureWindow(cdp) {
+  try {
+    const windowInfo = await cdp.send('Browser.getWindowForTarget')
+    if (windowInfo?.windowId != null) {
+      await cdp.send('Browser.setWindowBounds', {
+        bounds: {
+          height: 1080,
+          left: 80,
+          top: 80,
+          width: 1440,
+          windowState: 'normal'
+        },
+        windowId: windowInfo.windowId
+      })
+    }
+  } catch {
+    // Some Electron/Chromium builds do not expose Browser.* through the page target.
+  }
+}
+
 async function capture(cdp, filePath) {
+  await normalizeCaptureWindow(cdp)
   await cdp.send('Page.bringToFront')
-  await cdp.eval(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`)
+  await cdp.eval(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))`)
   await sleep(300)
   const result = await cdp.send('Page.captureScreenshot', {
     captureBeyondViewport: false,
@@ -290,6 +322,23 @@ async function capture(cdp, filePath) {
   const image = pngDimensions(filePath)
   assert(image.width >= 1000 && image.height >= 700, `screenshot dimensions are too small: ${filePath} ${image.width}x${image.height}`)
   return image
+}
+
+async function captureUntilRendered(cdp, filePath, { label, minBytes }) {
+  const started = Date.now()
+  let lastImage = null
+  while (Date.now() - started < smokeTimeoutMs) {
+    lastImage = await capture(cdp, filePath)
+    if (lastImage.bytes >= minBytes) return lastImage
+    await cdp.eval(`new Promise(resolve => {
+      document.body.style.transform = 'translateZ(0)'
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    })`)
+    await sleep(500)
+  }
+  throw new Error(
+    `${label} screenshot looks blank or under-rendered: ${filePath} (${lastImage?.bytes ?? 0} bytes after retry)`
+  )
 }
 
 async function navigateHash(cdp, route) {
@@ -365,9 +414,11 @@ async function main() {
   let cdp = null
   try {
     const target = await waitForTarget(options.remoteDebuggingPort)
+    fs.writeFileSync(path.join(options.artifactsDir, 'cdp-target.json'), `${JSON.stringify(target, null, 2)}\n`)
     cdp = await Cdp.open(target.webSocketDebuggerUrl)
     await cdp.send('Page.enable')
     await cdp.send('Runtime.enable')
+    await normalizeCaptureWindow(cdp)
     await cdp.send('Emulation.setDeviceMetricsOverride', {
       deviceScaleFactor: 1,
       height: 1080,
@@ -391,9 +442,46 @@ async function main() {
       })()`,
       'home body text after startup'
     )
-    const homePng = await capture(cdp, path.join(options.artifactsDir, 'desktop-home.png'))
+    await waitForCondition(
+      cdp,
+      `(() => {
+        const intro = document.querySelector('[data-slot="aui_intro"]')
+        const mas = document.querySelector('[data-purpose-route="mas"]')
+        if (!(intro instanceof HTMLElement) || !(mas instanceof HTMLButtonElement)) return false
+        const rect = intro.getBoundingClientRect()
+        const style = getComputedStyle(intro)
+        return rect.width > 500 &&
+          rect.height > 100 &&
+          style.visibility !== 'hidden' &&
+          Number(style.opacity || '1') > 0.5
+      })()`,
+      'home intro rendered'
+    )
+    await cdp.eval(`document.fonts?.ready || true`)
+    const homePng = await captureUntilRendered(cdp, path.join(options.artifactsDir, 'desktop-home.png'), {
+      label: 'home',
+      minBytes: 50_000
+    })
     const home = JSON.parse(await pageSnapshot(cdp))
     assert(home.bodyText.length > 20, 'home chrome is empty')
+    assertTextIncludesAny(home.bodyText, ['One Person Lab'], 'home OPL branding')
+    assertTextIncludesAny(home.bodyText, ['科研', 'MAS'], 'home MAS route chip')
+    assertTextIncludesAny(home.bodyText, ['基金', 'MAG'], 'home MAG route chip')
+    assertTextIncludesAny(home.bodyText, ['演示', 'RCA'], 'home RCA route chip')
+    assertTextExcludes(home.bodyText, ['HERMES AGENT'], 'home legacy Hermes wordmark')
+    await cdp.eval(`(() => {
+      const button = document.querySelector('[data-purpose-route="mas"]')
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error('MAS route chip button not found')
+      }
+      button.click()
+      return true
+    })()`)
+    await waitForCondition(
+      cdp,
+      `document.body.innerText.includes('科研 / MAS')`,
+      'MAS route chip inserts a route prompt'
+    )
 
     await navigateHash(cdp, '/settings?tab=providers')
     await waitForCondition(
@@ -444,6 +532,10 @@ async function main() {
       },
       assertions: {
         home_nonblank: true,
+        home_branding_opl: true,
+        home_legacy_hermes_wordmark_hidden: true,
+        home_route_chips_visible: true,
+        home_route_chip_inserts_prompt: true,
         model_access_gflabtoken_only: true,
         agents_capabilities_routes_visible: true,
         about_branding_visible: true,

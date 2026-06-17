@@ -177,6 +177,10 @@ if (requireApp) {
   const settingsVisualSummary = JSON.parse(fs.readFileSync(settingsVisualSummaryPath, 'utf8'))
   assert(settingsVisualSummary.status === 'opl_hermes_settings_visual_smoke_passed', 'packaged Settings visual smoke must pass')
   assert(settingsVisualSummary.assertions?.home_nonblank === true, 'packaged Settings visual smoke must prove a nonblank home')
+  assert(settingsVisualSummary.assertions?.home_branding_opl === true, 'packaged Settings visual smoke must prove OPL home branding')
+  assert(settingsVisualSummary.assertions?.home_legacy_hermes_wordmark_hidden === true, 'packaged Settings visual smoke must prove legacy Hermes home wordmark is hidden')
+  assert(settingsVisualSummary.assertions?.home_route_chips_visible === true, 'packaged Settings visual smoke must prove home route chips are visible')
+  assert(settingsVisualSummary.assertions?.home_route_chip_inserts_prompt === true, 'packaged Settings visual smoke must prove home route chips write into the composer')
   assert(settingsVisualSummary.assertions?.model_access_gflabtoken_only === true, 'packaged Settings visual smoke must prove gflabtoken-only model access')
   assert(settingsVisualSummary.assertions?.agents_capabilities_routes_visible === true, 'packaged Settings visual smoke must prove agents/capabilities routes are visible')
   assert(settingsVisualSummary.assertions?.forbidden_provider_controls_hidden === true, 'packaged Settings visual smoke must prove forbidden provider controls are hidden')
@@ -186,6 +190,8 @@ if (requireApp) {
     assert(Number(screenshot.width || 0) >= 1_000, `packaged Settings visual smoke screenshot width too small: ${screenshot.path}`)
     assert(Number(screenshot.height || 0) >= 700, `packaged Settings visual smoke screenshot height too small: ${screenshot.path}`)
   }
+  const homeScreenshot = settingsVisualSummary.screenshots?.desktop_home
+  assert(Number(homeScreenshot?.bytes || 0) > 50_000, `packaged home visual smoke screenshot looks blank or under-rendered: ${homeScreenshot?.path}`)
 }
 
 console.log(JSON.stringify({ status: 'hermes_codex_candidate_valid', require_app: requireApp }, null, 2))

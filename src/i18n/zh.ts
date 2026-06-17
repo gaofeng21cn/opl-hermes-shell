@@ -254,6 +254,31 @@ export const zh: Translations = {
     noResults: '未找到语言'
   },
 
+  intro: {
+    body: '直接描述要推进的工作。需要科研、基金或演示任务时，可以先选择下面的内置智能体路线。',
+    routeAria: 'One Person Lab 内置智能体路线',
+    routes: {
+      mas: {
+        description: 'Med Auto Science',
+        label: '科研',
+        prompt: '科研 / MAS：',
+        shortLabel: 'MAS'
+      },
+      mag: {
+        description: 'Med Auto Grant',
+        label: '基金',
+        prompt: '基金 / MAG：',
+        shortLabel: 'MAG'
+      },
+      rca: {
+        description: 'RedCube AI',
+        label: '演示',
+        prompt: '演示 / RCA：',
+        shortLabel: 'RCA'
+      }
+    }
+  },
+
   settings: {
     closeSettings: '关闭设置',
     exportConfig: '导出配置',
@@ -1409,12 +1434,12 @@ export const zh: Translations = {
   composer: {
     message: '消息',
     wakingProfile: profile => `正在唤醒 ${profile}…`,
-    placeholderStarting: '正在启动 Hermes…',
-    placeholderReconnecting: '正在重新连接 Hermes…',
+    placeholderStarting: '正在启动 One Person Lab…',
+    placeholderReconnecting: '正在重新连接 One Person Lab…',
     placeholderFollowUp: '发送后续消息',
     newSessionPlaceholders: [
       '我们要构建什么？',
-      '给 Hermes 一个任务',
+      '给 One Person Lab 一个任务',
       '你在想什么？',
       '描述你需要什么',
       '我们该处理什么？',

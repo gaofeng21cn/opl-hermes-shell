@@ -1,172 +1,63 @@
-import { type CSSProperties, useState } from 'react'
+import { type CSSProperties } from 'react'
 
-import introCopyJsonl from './intro-copy.jsonl?raw'
-
-type IntroCopy = {
-  headline: string
-  body: string
-}
-
-type IntroCopyRecord = IntroCopy & {
-  personality: string
-}
+import { requestComposerInsert } from '@/app/chat/composer/focus'
+import { useI18n } from '@/i18n'
+import type { Translations } from '@/i18n'
+import { Brain, FileText, Sparkles } from '@/lib/icons'
+import { cn } from '@/lib/utils'
 
 export type IntroProps = {
   personality?: string
   seed?: number
 }
 
-const NEUTRAL_PERSONALITIES = new Set(['', 'default', 'none', 'neutral'])
+type OplRouteId = 'mag' | 'mas' | 'rca'
 
-const FALLBACK_COPY: IntroCopy[] = [
+type OplRouteChip = {
+  icon: typeof Brain
+  id: OplRouteId
+}
+
+const WORDMARK = 'One Person Lab'
+
+const ROUTE_CHIPS: readonly OplRouteChip[] = [
   {
-    headline: 'What are we moving today?',
-    body: "Send a bug, branch, plan, or rough idea. I'll inspect the repo and turn it into the next concrete step."
+    icon: Brain,
+    id: 'mas'
   },
   {
-    headline: "What's on your mind?",
-    body: "Bring the code, question, or stuck part. I'll read the room before making changes."
+    icon: FileText,
+    id: 'mag'
   },
   {
-    headline: 'What should Hermes look at?',
-    body: "Send the task, failing path, or half-formed plan. I'll help turn it into action."
-  },
-  {
-    headline: 'Where should we start?',
-    body: "Bring the problem, goal, or file. I'll inspect first and keep the next step concrete."
-  },
-  {
-    headline: 'What needs attention?',
-    body: "Send the context you have. I'll help sort it into a plan or a fix."
+    icon: Sparkles,
+    id: 'rca'
   }
 ]
 
-function normalizeKey(value?: string): string {
-  return (value || '').trim().toLowerCase()
-}
-
-function titleize(value: string): string {
-  return value
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
-function isIntroCopyRecord(value: unknown): value is IntroCopyRecord {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-
-  const record = value as Record<string, unknown>
-
-  return (
-    typeof record.personality === 'string' &&
-    typeof record.headline === 'string' &&
-    typeof record.body === 'string' &&
-    Boolean(record.personality.trim()) &&
-    Boolean(record.headline.trim()) &&
-    Boolean(record.body.trim())
-  )
-}
-
-function parseIntroCopy(raw: string): Record<string, IntroCopy[]> {
-  const byPersonality: Record<string, IntroCopy[]> = {}
-
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim()
-
-    if (!trimmed) {
-      continue
-    }
-
-    try {
-      const parsed: unknown = JSON.parse(trimmed)
-
-      if (!isIntroCopyRecord(parsed)) {
-        continue
-      }
-
-      const key = normalizeKey(parsed.personality)
-      byPersonality[key] ??= []
-      byPersonality[key].push({
-        headline: parsed.headline.trim(),
-        body: parsed.body.trim()
-      })
-    } catch {
-      // Bad generated copy should not break the whole desktop app.
-    }
-  }
-
-  return byPersonality
-}
-
-const INTRO_COPY_BY_PERSONALITY = parseIntroCopy(introCopyJsonl)
-
-function neutralCopy(): IntroCopy[] {
-  return INTRO_COPY_BY_PERSONALITY.none || INTRO_COPY_BY_PERSONALITY.default || FALLBACK_COPY
-}
-
-function fallbackCopyForPersonality(personalityKey: string): IntroCopy[] {
-  if (NEUTRAL_PERSONALITIES.has(personalityKey)) {
-    return neutralCopy()
-  }
-
-  const label = titleize(personalityKey)
-
-  return [
-    {
-      headline: `${label} mode is on. What should we work on?`,
-      body: "Send the task, file, or rough idea. I'll use your configured voice and keep the work grounded in this repo."
-    },
-    {
-      headline: `What does ${label} Hermes need to see?`,
-      body: "Bring the context or the stuck part. I'll adapt to your configured personality."
-    },
-    {
-      headline: `${label} mode is ready.`,
-      body: "Send the problem, file, or idea. I'll follow the personality you've configured."
-    },
-    {
-      headline: `What should ${label} Hermes tackle?`,
-      body: "Drop the task here. I'll keep the work grounded in the repo."
-    },
-    {
-      headline: 'Where should we begin?',
-      body: `Give me the context and I'll answer in ${label} mode.`
-    }
-  ]
-}
-
-function pickCopy(copies: IntroCopy[], seed = 0): IntroCopy {
-  return copies[Math.abs(seed) % copies.length] || FALLBACK_COPY[0]
-}
-
-const WORDMARK = 'HERMES AGENT'
-
-function resolveCopy(personality?: string, seed?: number): IntroCopy {
-  const personalityKey = normalizeKey(personality)
-
-  const copies = NEUTRAL_PERSONALITIES.has(personalityKey)
-    ? INTRO_COPY_BY_PERSONALITY[personalityKey] || neutralCopy()
-    : INTRO_COPY_BY_PERSONALITY[personalityKey] || fallbackCopyForPersonality(personalityKey)
-
-  return pickCopy(copies, seed)
+function routeChipTitle(route: Translations['intro']['routes'][OplRouteId]): string {
+  return `${route.label} / ${route.shortLabel} - ${route.description}`
 }
 
 export function Intro({ personality, seed }: IntroProps) {
-  const [mountSeed] = useState(() => Math.floor(Math.random() * 100000))
-  const copy = resolveCopy(personality, mountSeed + (seed ?? 0))
+  void personality
+  void seed
+  const { t } = useI18n()
+  const copy = t.intro
+
+  const selectRoute = (route: OplRouteChip) => {
+    requestComposerInsert(copy.routes[route.id].prompt, { mode: 'inline', target: 'main' })
+  }
 
   return (
     <div
-      className="pointer-events-none flex w-full min-w-0 flex-col items-center justify-center px-0.5 py-6 text-center text-muted-foreground sm:px-6 lg:px-8"
+      className="flex w-full min-w-0 flex-col items-center justify-center px-0.5 py-6 text-center text-muted-foreground sm:px-6 lg:px-8"
       data-slot="aui_intro"
     >
       <div className="w-full min-w-0">
         <p
           aria-label={WORDMARK}
-          className="fit-text mx-auto mb-1 w-[calc(100%-1rem)] font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] text-midground mix-blend-plus-lighter dark:text-foreground/90"
+          className="fit-text pointer-events-none mx-auto mb-1 w-[calc(100%-1rem)] font-['Collapse'] font-bold leading-[0.9] text-midground mix-blend-plus-lighter dark:text-foreground/90"
           style={{ '--fit-min': '2.75rem' } as CSSProperties}
         >
           <span>
@@ -175,7 +66,37 @@ export function Intro({ personality, seed }: IntroProps) {
           <span aria-hidden="true">{WORDMARK}</span>
         </p>
 
-        <p className="m-0 text-center leading-normal tracking-tight">{copy.body}</p>
+        <p className="pointer-events-none m-0 text-center leading-normal tracking-tight">{copy.body}</p>
+        <div
+          aria-label={copy.routeAria}
+          className="mx-auto mt-4 flex max-w-[34rem] flex-wrap items-center justify-center gap-2"
+        >
+          {ROUTE_CHIPS.map(route => {
+            const Icon = route.icon
+            const routeCopy = copy.routes[route.id]
+
+            return (
+              <button
+                aria-label={routeChipTitle(routeCopy)}
+                className={cn(
+                  'group inline-flex h-9 items-center gap-2 rounded-full border border-border/60 bg-(--composer-fill) px-3 text-[0.75rem] font-medium text-foreground/82 shadow-[0_0.375rem_1.5rem_color-mix(in_srgb,var(--dt-foreground)_8%,transparent)]',
+                  'backdrop-blur-[0.75rem] backdrop-saturate-[1.08] transition-[border-color,background-color,color,transform,box-shadow] duration-150 ease-out',
+                  'hover:-translate-y-px hover:border-primary/45 hover:bg-[color-mix(in_srgb,var(--dt-primary)_8%,var(--composer-fill))] hover:text-foreground',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
+                )}
+                data-purpose-route={route.id}
+                key={route.id}
+                onClick={() => selectRoute(route)}
+                title={routeChipTitle(routeCopy)}
+                type="button"
+              >
+                <Icon className="size-4 text-primary/80 transition-colors group-hover:text-primary" strokeWidth={1.75} />
+                <span>{routeCopy.label}</span>
+                <span className="text-[0.6875rem] font-normal text-(--ui-text-tertiary)">{routeCopy.shortLabel}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

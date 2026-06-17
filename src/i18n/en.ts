@@ -258,6 +258,31 @@ export const en: Translations = {
     noResults: 'No languages found'
   },
 
+  intro: {
+    body: 'Describe the work you want to move. For research, grant, or presentation tasks, start with one of the built-in agent routes below.',
+    routeAria: 'One Person Lab built-in agent routes',
+    routes: {
+      mas: {
+        description: 'Med Auto Science',
+        label: 'Research',
+        prompt: 'Research / MAS: ',
+        shortLabel: 'MAS'
+      },
+      mag: {
+        description: 'Med Auto Grant',
+        label: 'Grant',
+        prompt: 'Grant / MAG: ',
+        shortLabel: 'MAG'
+      },
+      rca: {
+        description: 'RedCube AI',
+        label: 'Presentation',
+        prompt: 'Presentation / RCA: ',
+        shortLabel: 'RCA'
+      }
+    }
+  },
+
   settings: {
     closeSettings: 'Close settings',
     exportConfig: 'Export config',
@@ -1226,12 +1251,12 @@ export const en: Translations = {
   composer: {
     message: 'Message',
     wakingProfile: profile => `Waking up ${profile}…`,
-    placeholderStarting: 'Starting Hermes...',
-    placeholderReconnecting: 'Reconnecting to Hermes…',
+    placeholderStarting: 'Starting One Person Lab...',
+    placeholderReconnecting: 'Reconnecting to One Person Lab…',
     placeholderFollowUp: 'Send follow-up',
     newSessionPlaceholders: [
       'What are we building?',
-      'Give Hermes a task',
+      'Give One Person Lab a task',
       "What's on your mind?",
       'Describe what you need',
       'What should we tackle?',
