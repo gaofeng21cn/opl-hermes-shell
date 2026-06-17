@@ -318,6 +318,31 @@ function apiKeyPresent(initializePayload) {
   return typeof checklistValue === 'boolean' ? checklistValue : false
 }
 
+function getAppState(payload) {
+  return payload?.app_state || payload || {}
+}
+
+function getAppStateCodex(payload) {
+  return getAppState(payload)?.core?.codex || {}
+}
+
+function appStateStartupReadiness(payload) {
+  const codex = getAppStateCodex(payload)
+  const codexInstalled = codex.installed === true ||
+    codex.version_status === 'compatible' ||
+    Boolean(codex.binary_path && codex.version)
+  const apiKeyKnown = typeof codex.api_key_present === 'boolean'
+
+  return {
+    canUseLightweightStartup: codexInstalled && apiKeyKnown,
+    codexInstalled,
+    apiKeyPresent: codex.api_key_present === true,
+    defaultModel: typeof codex.default_model === 'string' ? codex.default_model : null,
+    defaultReasoningEffort: typeof codex.default_reasoning_effort === 'string' ? codex.default_reasoning_effort : null,
+    providerBaseUrl: typeof codex.provider_base_url === 'string' ? codex.provider_base_url : null
+  }
+}
+
 function readyToLaunch(initializePayload) {
   return Boolean(getSetupFlow(initializePayload).ready_to_launch)
 }
@@ -478,6 +503,72 @@ async function runBestEffortJsonStage({
   }
 }
 
+async function runLightweightStartupProbe({ cwd, env, abortSignal, emit }) {
+  const startedAt = Date.now()
+  emit({ type: 'stage', name: 'opl-initialize', state: 'running' })
+  try {
+    const result = await runCommand('opl', ['app', 'state', '--profile', 'fast', '--json'], {
+      cwd,
+      env,
+      abortSignal,
+      stage: 'opl-initialize',
+      emit,
+      timeoutMs: 20_000,
+      emitOutput: false
+    })
+    const durationMs = Date.now() - startedAt
+    if (result.cancelled) {
+      emit({ type: 'failed', stage: 'opl-initialize', error: 'bootstrap cancelled by user' })
+      return { ok: false, cancelled: true }
+    }
+    if (result.code !== 0) {
+      const error = result.stderr.trim() || result.stdout.trim() || `exit code ${result.code}`
+      emit({
+        type: 'log',
+        stage: 'opl-initialize',
+        line: `[opl-bootstrap] lightweight startup probe unavailable: ${error}`,
+        stream: 'stderr'
+      })
+      return { ok: false, skipped: true, error }
+    }
+
+    const json = safeJsonParse(result.stdout)
+    const readiness = appStateStartupReadiness(json)
+    if (!readiness.canUseLightweightStartup) {
+      emit({
+        type: 'log',
+        stage: 'opl-initialize',
+        line: '[opl-bootstrap] lightweight startup probe did not prove Codex/model-access readiness; falling back to one-time initialization.'
+      })
+      return { ok: false, skipped: true, json, readiness }
+    }
+
+    emit({
+      type: 'stage',
+      name: 'opl-initialize',
+      state: 'succeeded',
+      durationMs,
+      json: {
+        ok: true,
+        stage: 'opl-initialize',
+        mode: 'lightweight_app_state_probe',
+        codex_installed: readiness.codexInstalled,
+        api_key_present: readiness.apiKeyPresent
+      }
+    })
+    return { ok: true, json, readiness }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    emit({
+      type: 'log',
+      stage: 'opl-initialize',
+      line: `[opl-bootstrap] lightweight startup probe failed: ${message}`,
+      stream: 'stderr'
+    })
+    return { ok: false, skipped: true, error: message }
+  }
+}
+
 async function runOplMaintenanceStages({ cwd, env, abortSignal, emit, emitOutput = false }) {
   const status = await runBestEffortJsonStage({
     name: 'opl-background-status-refresh',
@@ -557,11 +648,6 @@ async function runOplBootstrap(opts = {}) {
     }
   }
 
-  emit({
-    type: 'manifest',
-    stages: STAGES,
-    protocolVersion: 1
-  })
   emit({ type: 'log', line: `[opl-bootstrap] starting at ${new Date().toISOString()}; runLog=${runLog.path}` })
 
   let initial = null
@@ -625,7 +711,72 @@ async function runOplBootstrap(opts = {}) {
       }
     }
 
+    if (startupMarker.missingCore.length === 0) {
+      emit({ type: 'log', line: `[opl-bootstrap] checking lightweight startup readiness before one-time initialization: ${startupMarker.reason}` })
+      const probe = await runLightweightStartupProbe({ cwd, env, abortSignal, emit })
+      if (probe.cancelled) return probe
+      if (probe.ok) {
+        const needsApiKey = !probe.readiness.apiKeyPresent
+        emitStage(emit, 'opl-core-setup', 'skipped', {
+          reason: 'One Person Lab app state fast probe shows core startup dependencies are already available.'
+        })
+        emitStage(emit, 'opl-post-setup-check', 'skipped', {
+          reason: 'No one-time setup changes required.'
+        })
+        if (needsApiKey) {
+          emit({
+            type: 'route',
+            route: 'model-access',
+            reason: 'API key entry continues in the model access screen.',
+            needsApiKey: true
+          })
+        }
+        emitStage(emit, 'opl-codex-adapter', 'succeeded')
+        if (needsApiKey) {
+          emitStage(emit, 'opl-maintenance-schedule', 'skipped', {
+            reason: 'Background maintenance will run after model access is configured.'
+          })
+        } else {
+          emitStage(emit, 'opl-maintenance-schedule', 'succeeded')
+        }
+
+        const marker = {
+          startup_path: 'lightweight_probe',
+          marker_reason: `${startupMarker.reason}_fast_state_ready`,
+          ready_to_launch: true,
+          api_key_present: probe.readiness.apiKeyPresent,
+          maintenance_deferred: true,
+          missing_core: [],
+          default_model: probe.readiness.defaultModel,
+          default_reasoning_effort: probe.readiness.defaultReasoningEffort,
+          provider_base_url: probe.readiness.providerBaseUrl
+        }
+        const persistedMarker = writeOplStartupMarker(markerPath, marker) || {
+          kind: 'opl-app-initialize',
+          ...marker,
+          completedAt: new Date().toISOString()
+        }
+        emit({ type: 'complete', marker: persistedMarker })
+        return {
+          ok: true,
+          initialize: null,
+          appState: probe.json,
+          marker: persistedMarker,
+          needsApiKey,
+          maintenanceDeferred: true,
+          startupMode: 'lightweight'
+        }
+      }
+    }
+
     emit({ type: 'log', line: `[opl-bootstrap] running one-time initialization: ${startupMarker.reason}` })
+    emit({
+      type: 'manifest',
+      stages: STAGES,
+      protocolVersion: 1
+    })
+    emitStage(emit, 'opl-cli-check', 'succeeded')
+    emitStage(emit, 'codex-cli-check', 'succeeded')
     if (startupMarker.missingCore.length > 0) {
       emit({
         type: 'log',

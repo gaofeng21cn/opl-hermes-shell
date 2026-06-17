@@ -2488,15 +2488,6 @@ async function ensureRuntime(backend) {
 
   if (OPL_CODEX_CANDIDATE && backend.kind === 'bootstrap-needed') {
     rememberLog('[opl-bootstrap] no Hermes runtime found; running OPL App initialization instead of Hermes Agent install')
-    try {
-      broadcastBootstrapEvent({
-        type: 'manifest',
-        stages: [],
-        protocolVersion: null
-      })
-    } catch {
-      void 0
-    }
 
     bootstrapAbortController = new AbortController()
     const result = await runOplBootstrap({

@@ -72,19 +72,48 @@ function initializePayload(apiKeyPresent) {
   }
 }
 
-function makeFixtureBin(sandbox, apiKeyPresent) {
+function appStatePayload(apiKeyPresent, codexInstalled = true) {
+  return {
+    app_state: {
+      meta: {
+        profile: 'fast',
+        read_policy: 'bounded_local_read_no_network_no_repair'
+      },
+      core: {
+        codex: {
+          installed: codexInstalled,
+          version_status: codexInstalled ? 'compatible' : 'missing',
+          binary_path: codexInstalled ? '/tmp/opl-smoke/bin/codex' : null,
+          version: codexInstalled ? 'codex-cli 0.140.0' : null,
+          api_key_present: apiKeyPresent,
+          default_model: 'gpt-5.5',
+          default_reasoning_effort: 'xhigh',
+          provider_base_url: 'https://gflabtoken.cn/v1'
+        }
+      }
+    }
+  }
+}
+
+function makeFixtureBin(sandbox, apiKeyPresent, codexInstalled = true) {
   const binDir = path.join(sandbox, 'bin')
   const callsPath = path.join(sandbox, 'opl-calls.log')
   fs.mkdirSync(binDir, { recursive: true })
   fs.mkdirSync(path.dirname(callsPath), { recursive: true })
   const payload = JSON.stringify(initializePayload(apiKeyPresent))
+  const appStatePayloadJson = JSON.stringify(appStatePayload(apiKeyPresent, codexInstalled))
   writeExecutable(path.join(binDir, 'opl'), `#!/usr/bin/env node
 const fs = require('node:fs')
 const args = process.argv.slice(2)
 const payload = ${JSON.stringify(payload)}
+const appStatePayload = ${JSON.stringify(appStatePayloadJson)}
 fs.appendFileSync(${JSON.stringify(callsPath)}, args.join(' ') + '\\n')
 if (args.join(' ') === 'system initialize --json') {
   console.log(payload)
+  process.exit(0)
+}
+if (args.join(' ') === 'app state --profile fast --json') {
+  console.log(appStatePayload)
   process.exit(0)
 }
 if (args.join(' ') === 'install --skip-gui-open --skip-modules --skip-native-helper-repair --json') {
@@ -196,14 +225,21 @@ function stageState(text, stageName) {
   return Array.from(matches, match => match[1])
 }
 
-async function runLaunch({ apiKeyPresent, name, sandbox, expectBlockingInitialize, expectRouteToModelAccess }) {
+async function runLaunch({
+  apiKeyPresent,
+  codexInstalled = true,
+  name,
+  sandbox,
+  expectBlockingInitialize,
+  expectRouteToModelAccess
+}) {
   const userData = path.join(sandbox, 'user-data')
   const hermesHome = path.join(sandbox, `hermes-home-${name}`)
   const workspace = path.join(sandbox, 'workspace')
   fs.mkdirSync(userData, { recursive: true })
   fs.mkdirSync(hermesHome, { recursive: true })
   fs.mkdirSync(workspace, { recursive: true })
-  const { binDir, callsPath } = makeFixtureBin(path.join(sandbox, `fixture-${name}`), apiKeyPresent)
+  const { binDir, callsPath } = makeFixtureBin(path.join(sandbox, `fixture-${name}`), apiKeyPresent, codexInstalled)
   const logPath = path.join(hermesHome, 'logs', 'desktop.log')
   const callsBefore = readCalls(callsPath).length
 
@@ -246,15 +282,25 @@ async function runLaunch({ apiKeyPresent, name, sandbox, expectBlockingInitializ
     text = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8') : text
     assert(!/install\.sh|install\.ps1|Hermes Agent installer/i.test(text), `${name}: Hermes installer path leaked into OPL first run`)
     assert(!/unsupported rpc config\.(get|set)/i.test(text), `${name}: renderer-safe config RPC is still unsupported`)
-    const expectedStages = [
-      'opl-cli-check',
-      'codex-cli-check',
-      'opl-initialize',
-      'opl-core-setup',
-      'opl-post-setup-check',
-      'opl-codex-adapter',
-      'opl-maintenance-schedule'
-    ]
+    const expectedStages = expectBlockingInitialize
+      ? [
+        'opl-cli-check',
+        'codex-cli-check',
+        'opl-initialize',
+        'opl-core-setup',
+        'opl-post-setup-check',
+        'opl-codex-adapter',
+        'opl-maintenance-schedule'
+      ]
+      : [
+        'opl-cli-check',
+        'codex-cli-check',
+        'opl-initialize',
+        'opl-core-setup',
+        'opl-post-setup-check',
+        'opl-codex-adapter',
+        'opl-maintenance-schedule'
+      ]
     for (const stage of expectedStages) {
       assert(text.includes(`"name":"${stage}"`) || text.includes(`"stage":"${stage}"`), `${name}: ${stage} did not emit`)
     }
@@ -272,13 +318,48 @@ async function runLaunch({ apiKeyPresent, name, sandbox, expectBlockingInitializ
       )
       assert(newCalls.includes('system initialize --json'), `${name}: initialize command did not run`)
     } else {
+      const backgroundCalls = [
+        'system initialize --json',
+        'system startup-maintenance --json',
+        'system reconcile-modules --json'
+      ]
       assert(
-        initializeStates.every(state => state === 'skipped'),
-        `${name}: full initialize ran before adapter ready, initializeStates=${JSON.stringify(initializeStates)}`
+        newCalls.includes('app state --profile fast --json') ||
+          newCalls.length === 0 ||
+          newCalls.every(call => backgroundCalls.includes(call)),
+        `${name}: calls were neither fast probe, marker reuse, nor deferred background refresh: ${JSON.stringify(newCalls)}`
+      )
+      const backgroundStatusIndex = text.indexOf('"stage":"opl-background-status-refresh"')
+      assert(
+        !text.includes('[opl-bootstrap] running one-time initialization'),
+        `${name}: one-time initialization path ran during lightweight startup`
       )
       assert(
-        text.includes('"stage":"opl-background-status-refresh"') || newCalls.length === 0,
-        `${name}: expected only background status refresh calls after adapter ready, calls=${JSON.stringify(newCalls)}`
+        !text.includes('"type":"manifest","stages":[{"name":"opl-cli-check"'),
+        `${name}: install checklist manifest was shown during lightweight startup`
+      )
+      if (newCalls.includes('system initialize --json')) {
+        assert(
+          backgroundStatusIndex > adapterReadyIndex,
+          `${name}: full initialize ran before adapter ready instead of deferred background refresh`
+        )
+      }
+      if (newCalls.includes('app state --profile fast --json')) {
+        assert(
+          initializeStates.includes('succeeded'),
+          `${name}: fast app state probe did not complete, initializeStates=${JSON.stringify(initializeStates)}`
+        )
+      } else {
+        assert(
+          initializeStates.every(state => state === 'skipped'),
+          `${name}: expected marker hot launch to skip initialize stage, initializeStates=${JSON.stringify(initializeStates)}`
+        )
+      }
+      assert(
+        apiKeyPresent
+          ? (text.includes('"stage":"opl-background-status-refresh"') || newCalls.length === 0)
+          : !text.includes('"stage":"opl-background-status-refresh"'),
+        `${name}: background refresh expectation mismatch, calls=${JSON.stringify(newCalls)}`
       )
     }
     if (apiKeyPresent) {
@@ -320,9 +401,10 @@ async function main() {
 
   const missingSandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-missing-key-'))
   const configuredSandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-configured-key-'))
+  const fallbackSandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-fallback-'))
   const missing = await runLaunch({
     apiKeyPresent: false,
-    expectBlockingInitialize: true,
+    expectBlockingInitialize: false,
     expectRouteToModelAccess: true,
     name: 'missing-key-first-run',
     sandbox: missingSandbox
@@ -336,7 +418,7 @@ async function main() {
   })
   const configured = await runLaunch({
     apiKeyPresent: true,
-    expectBlockingInitialize: true,
+    expectBlockingInitialize: false,
     expectRouteToModelAccess: false,
     name: 'configured-key-first-run',
     sandbox: configuredSandbox
@@ -348,6 +430,14 @@ async function main() {
     name: 'configured-key-hot-launch',
     sandbox: configuredSandbox
   })
+  const fallbackInitialize = await runLaunch({
+    apiKeyPresent: true,
+    codexInstalled: false,
+    expectBlockingInitialize: true,
+    expectRouteToModelAccess: false,
+    name: 'fast-probe-not-ready-first-run',
+    sandbox: fallbackSandbox
+  })
 
   console.log(JSON.stringify({
     status: 'opl_hermes_packaged_first_run_smoke_passed',
@@ -355,7 +445,8 @@ async function main() {
       missing_key: missing,
       missing_key_hot_launch: missingHot,
       configured_key: configured,
-      configured_key_hot_launch: configuredHot
+      configured_key_hot_launch: configuredHot,
+      fast_probe_not_ready_first_run: fallbackInitialize
     }
   }, null, 2))
 }

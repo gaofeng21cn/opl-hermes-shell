@@ -51,11 +51,13 @@ OPL_APP_SHELL_ADAPTER_CONTRACT=contracts/shell-adapters/hermes-codex.json npm ru
 - OPL i18n：普通 UI 只维护简体中文和英文。中文系统语言统一进入 `zh`，日文和其它
   非支持语言回退英文；不要继续增加繁体中文或日文 locale 文件。
 - OPL startup fallback：当候选包没有可用 Hermes runtime、需要走 OPL fallback 时，
-  启动语义按 App repo 的四线模型执行：热启动只做 marker、CLI、模型访问和 adapter
-  轻量检查；marker 缺失、过旧或核心组件缺失才进入一次性本机初始化 checklist；
-  缺 key 进入单独模型访问向导；`opl system initialize --json`、startup maintenance、
-  module reconcile 和 OPL 状态刷新必须在主界面可见后后台执行，不能成为每次启动
-  首页的阻塞 gate。
+  启动语义按 App repo 的四线模型执行：热启动只做 marker、CLI、`opl app state
+  --profile fast --json` 模型访问探测和 adapter 轻量检查；marker 缺失或过旧本身
+  不能直接触发 full initialize，必须先做 fast app state readiness probe，探测成功
+  则补写 marker 并进入主界面；只有探测失败或核心组件缺失才进入一次性本机初始化
+  checklist；缺 key 进入单独模型访问向导；`opl system initialize --json`、startup
+  maintenance、module reconcile 和 OPL 状态刷新必须在主界面可见后后台执行，不能成为
+  每次启动首页的阻塞 gate。
 - executor bridge reference：`electron/opl-codex-gateway.cjs` 只保留为实验 bridge
   和测试材料，明确 `replacesHermesBackend=false`。Codex CLI、OPL app state/action
   和 MAS/MAG/RCA 不得再用这个最小 shim 全量接管 `/api/*` 和 WebSocket backend。

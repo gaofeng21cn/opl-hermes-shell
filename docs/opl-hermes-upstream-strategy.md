@@ -101,10 +101,12 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   日文和其它非支持语言回退英文。不要继续增加繁体中文或日文 locale 文件。
 - **OPL startup fallback**：没有可用 Hermes runtime 且进入 OPL fallback 时，按
   App repo 的四线模型分流。每次启动只做 marker、One Person Lab CLI、Codex CLI、
-  gflabtoken 模型访问和 Codex adapter startup 的轻量检查；marker 缺失、过旧或核心
-  组件缺失时才复用 Hermes checklist UI 做一次性本机初始化；缺 key 进入单独模型访问
-  向导；`opl system initialize --json`、startup maintenance、module reconcile 和
-  OPL 状态刷新在主界面可见后后台执行，不得成为热启动首页 gate。
+  `opl app state --profile fast --json` 模型访问探测和 Codex adapter startup 的轻量
+  检查；marker 缺失或过旧不能单独进入 full initialize，必须先用 fast app state probe
+  判断已安装机器是否可直接进入主界面；只有 probe 失败或核心组件缺失时才复用 Hermes
+  checklist UI 做一次性本机初始化；缺 key 进入单独模型访问向导；`opl system
+  initialize --json`、startup maintenance、module reconcile 和 OPL 状态刷新在主界面
+  可见后后台执行，不得成为热启动首页 gate。
 - **Codex/OPL/MAS 扩展点**：优先使用 Hermes 原生 `openai-codex`、
   `model.openai_runtime=codex_app_server` 和 `skills.external_dirs` 能力。
   在 OPL first-run fallback 路径中，`electron/opl-codex-gateway.cjs` 作为
