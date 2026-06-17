@@ -8,7 +8,7 @@ const outDir = path.join(root, 'out')
 const releaseDir = path.join(root, 'release')
 const manifestPath = path.join(outDir, 'hermes-codex-candidate-manifest.json')
 const productName = 'One Person Lab Hermes Candidate'
-const upstreamSourceRef = 'c6b0eb4de0e5010a752e312c0577a4d04d2a08a5'
+const upstreamSourceRef = '5e01a5dbf1b7bc0144d9057be706da1ea9f065c3'
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
