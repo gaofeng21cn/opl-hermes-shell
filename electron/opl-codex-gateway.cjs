@@ -14,6 +14,458 @@ const {
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 const PRODUCT_NAME = 'One Person Lab Hermes Candidate'
 
+const CANDIDATE_CONFIG_FIELDS = {
+  model_context_length: {
+    category: 'model',
+    description: 'Optional context window override for the selected model. Leave 0 to use backend defaults.',
+    type: 'number'
+  },
+  fallback_providers: {
+    category: 'model',
+    description: 'Backup provider:model entries for Hermes-compatible fallback display.',
+    type: 'list'
+  },
+  'display.personality': {
+    category: 'display',
+    description: 'Default assistant style for new sessions.',
+    type: 'string'
+  },
+  timezone: {
+    category: 'display',
+    description: 'Timezone hint used by the desktop UI.',
+    type: 'string'
+  },
+  'display.show_reasoning': {
+    category: 'display',
+    description: 'Show reasoning sections when the backend exposes them.',
+    type: 'boolean'
+  },
+  'agent.image_input_mode': {
+    category: 'agent',
+    description: 'How image attachments are passed to the executor.',
+    type: 'select',
+    options: ['auto', 'native', 'text']
+  },
+  'agent.reasoning_effort': {
+    category: 'agent',
+    description: 'Default Codex reasoning effort.',
+    type: 'select',
+    options: ['minimal', 'low', 'medium', 'high', 'xhigh']
+  },
+  'terminal.cwd': {
+    category: 'terminal',
+    description: 'Default workspace directory.',
+    type: 'string'
+  },
+  'code_execution.mode': {
+    category: 'code_execution',
+    description: 'How code execution is scoped to the current project.',
+    type: 'select',
+    options: ['project', 'strict']
+  },
+  'terminal.persistent_shell': {
+    category: 'terminal',
+    description: 'Keep shell state between commands when supported.',
+    type: 'boolean'
+  },
+  'terminal.env_passthrough': {
+    category: 'terminal',
+    description: 'Environment variables passed through to tool execution.',
+    type: 'list'
+  },
+  file_read_max_chars: {
+    category: 'terminal',
+    description: 'Maximum characters read from one file request.',
+    type: 'number'
+  },
+  'approvals.mode': {
+    category: 'approvals',
+    description: 'Approval mode shown by the Hermes-compatible UI.',
+    type: 'select',
+    options: ['manual', 'smart', 'off']
+  },
+  'approvals.timeout': {
+    category: 'approvals',
+    description: 'Approval prompt timeout in seconds.',
+    type: 'number'
+  },
+  'approvals.mcp_reload_confirm': {
+    category: 'approvals',
+    description: 'Ask before reloading MCP servers.',
+    type: 'boolean'
+  },
+  command_allowlist: {
+    category: 'approvals',
+    description: 'Commands allowed without extra confirmation in Hermes-compatible surfaces.',
+    type: 'list'
+  },
+  'security.redact_secrets': {
+    category: 'security',
+    description: 'Hide detected secrets from model-visible content when possible.',
+    type: 'boolean'
+  },
+  'security.allow_private_urls': {
+    category: 'security',
+    description: 'Allow requests to private URLs.',
+    type: 'boolean'
+  },
+  'browser.allow_private_urls': {
+    category: 'browser',
+    description: 'Allow browser tooling to access private URLs.',
+    type: 'boolean'
+  },
+  'browser.auto_local_for_private_urls': {
+    category: 'browser',
+    description: 'Prefer local browser handling for private URLs.',
+    type: 'boolean'
+  },
+  'checkpoints.enabled': {
+    category: 'checkpoints',
+    description: 'Create rollback checkpoints before file edits when supported.',
+    type: 'boolean'
+  },
+  'memory.memory_enabled': {
+    category: 'memory',
+    description: 'Enable durable memory in Hermes-compatible surfaces.',
+    type: 'boolean'
+  },
+  'memory.user_profile_enabled': {
+    category: 'memory',
+    description: 'Maintain a compact user profile when supported.',
+    type: 'boolean'
+  },
+  'memory.memory_char_limit': {
+    category: 'memory',
+    description: 'Memory character budget.',
+    type: 'number'
+  },
+  'memory.user_char_limit': {
+    category: 'memory',
+    description: 'User profile character budget.',
+    type: 'number'
+  },
+  'memory.provider': {
+    category: 'memory',
+    description: 'Memory provider.',
+    type: 'select',
+    options: ['', 'builtin', 'honcho']
+  },
+  'context.engine': {
+    category: 'context',
+    description: 'Long-context management strategy.',
+    type: 'select',
+    options: ['default', 'compressor', 'custom']
+  },
+  'compression.enabled': {
+    category: 'compression',
+    description: 'Summarize older context when conversations get large.',
+    type: 'boolean'
+  },
+  'compression.threshold': {
+    category: 'compression',
+    description: 'Compression trigger threshold.',
+    type: 'number'
+  },
+  'compression.target_ratio': {
+    category: 'compression',
+    description: 'Target compression ratio.',
+    type: 'number'
+  },
+  'compression.protect_last_n': {
+    category: 'compression',
+    description: 'Number of recent messages protected from compression.',
+    type: 'number'
+  },
+  'tts.provider': {
+    category: 'voice',
+    description: 'Text-to-speech provider.',
+    type: 'select',
+    options: ['', 'edge', 'elevenlabs', 'openai', 'xai']
+  },
+  'stt.enabled': {
+    category: 'voice',
+    description: 'Enable speech transcription.',
+    type: 'boolean'
+  },
+  'stt.provider': {
+    category: 'voice',
+    description: 'Speech-to-text provider.',
+    type: 'select',
+    options: ['local', 'openai', 'groq', 'mistral', 'xai', 'elevenlabs']
+  },
+  'voice.auto_tts': {
+    category: 'voice',
+    description: 'Automatically speak assistant responses.',
+    type: 'boolean'
+  },
+  'tts.edge.voice': {
+    category: 'voice',
+    description: 'Edge text-to-speech voice.',
+    type: 'string'
+  },
+  'tts.openai.model': {
+    category: 'voice',
+    description: 'OpenAI text-to-speech model.',
+    type: 'select',
+    options: ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd']
+  },
+  'tts.openai.voice': {
+    category: 'voice',
+    description: 'OpenAI text-to-speech voice.',
+    type: 'select',
+    options: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']
+  },
+  'tts.elevenlabs.voice_id': {
+    category: 'voice',
+    description: 'ElevenLabs voice id.',
+    type: 'string'
+  },
+  'tts.elevenlabs.model_id': {
+    category: 'voice',
+    description: 'ElevenLabs text-to-speech model.',
+    type: 'select',
+    options: ['eleven_multilingual_v2', 'eleven_turbo_v2_5', 'eleven_flash_v2_5']
+  },
+  'tts.xai.voice_id': {
+    category: 'voice',
+    description: 'xAI voice id.',
+    type: 'string'
+  },
+  'tts.xai.language': {
+    category: 'voice',
+    description: 'xAI speech language.',
+    type: 'string'
+  },
+  'tts.minimax.model': {
+    category: 'voice',
+    description: 'MiniMax text-to-speech model.',
+    type: 'string'
+  },
+  'tts.minimax.voice_id': {
+    category: 'voice',
+    description: 'MiniMax voice id.',
+    type: 'string'
+  },
+  'tts.mistral.model': {
+    category: 'voice',
+    description: 'Mistral text-to-speech model.',
+    type: 'string'
+  },
+  'tts.mistral.voice_id': {
+    category: 'voice',
+    description: 'Mistral voice id.',
+    type: 'string'
+  },
+  'tts.gemini.model': {
+    category: 'voice',
+    description: 'Gemini text-to-speech model.',
+    type: 'string'
+  },
+  'tts.gemini.voice': {
+    category: 'voice',
+    description: 'Gemini text-to-speech voice.',
+    type: 'string'
+  },
+  'tts.neutts.model': {
+    category: 'voice',
+    description: 'NeuTTS model.',
+    type: 'string'
+  },
+  'tts.neutts.device': {
+    category: 'voice',
+    description: 'NeuTTS inference device.',
+    type: 'select',
+    options: ['cpu', 'cuda', 'mps']
+  },
+  'tts.kittentts.model': {
+    category: 'voice',
+    description: 'KittenTTS model.',
+    type: 'string'
+  },
+  'tts.kittentts.voice': {
+    category: 'voice',
+    description: 'KittenTTS voice.',
+    type: 'string'
+  },
+  'tts.piper.voice': {
+    category: 'voice',
+    description: 'Piper voice.',
+    type: 'string'
+  },
+  'stt.local.model': {
+    category: 'voice',
+    description: 'Local speech-to-text model.',
+    type: 'select',
+    options: ['tiny', 'base', 'small', 'medium', 'large-v3']
+  },
+  'stt.local.language': {
+    category: 'voice',
+    description: 'Speech transcription language.',
+    type: 'string'
+  },
+  'stt.openai.model': {
+    category: 'voice',
+    description: 'OpenAI speech-to-text model.',
+    type: 'select',
+    options: ['whisper-1', 'gpt-4o-mini-transcribe', 'gpt-4o-transcribe']
+  },
+  'stt.groq.model': {
+    category: 'voice',
+    description: 'Groq speech-to-text model.',
+    type: 'string'
+  },
+  'stt.mistral.model': {
+    category: 'voice',
+    description: 'Mistral speech-to-text model.',
+    type: 'select',
+    options: ['voxtral-mini-latest', 'voxtral-mini-2602']
+  },
+  'stt.elevenlabs.model_id': {
+    category: 'voice',
+    description: 'ElevenLabs speech-to-text model.',
+    type: 'select',
+    options: ['scribe_v2', 'scribe_v1']
+  },
+  'stt.elevenlabs.language_code': {
+    category: 'voice',
+    description: 'ElevenLabs language code.',
+    type: 'string'
+  },
+  'stt.elevenlabs.tag_audio_events': {
+    category: 'voice',
+    description: 'Tag speech transcription audio events.',
+    type: 'boolean'
+  },
+  'stt.elevenlabs.diarize': {
+    category: 'voice',
+    description: 'Enable speaker diarization.',
+    type: 'boolean'
+  },
+  'voice.record_key': {
+    category: 'voice',
+    description: 'Voice recording shortcut.',
+    type: 'string'
+  },
+  'voice.max_recording_seconds': {
+    category: 'voice',
+    description: 'Maximum voice recording length.',
+    type: 'number'
+  },
+  toolsets: {
+    category: 'advanced',
+    description: 'Hermes-compatible toolset labels visible to the desktop UI.',
+    type: 'list'
+  },
+  'terminal.backend': {
+    category: 'advanced',
+    description: 'Terminal execution backend.',
+    type: 'select',
+    options: ['local', 'docker', 'singularity', 'modal', 'daytona', 'ssh']
+  },
+  'terminal.timeout': {
+    category: 'advanced',
+    description: 'Command timeout in seconds.',
+    type: 'number'
+  },
+  'terminal.docker_image': {
+    category: 'advanced',
+    description: 'Docker image for terminal execution.',
+    type: 'string'
+  },
+  'terminal.singularity_image': {
+    category: 'advanced',
+    description: 'Singularity image for terminal execution.',
+    type: 'string'
+  },
+  'terminal.modal_image': {
+    category: 'advanced',
+    description: 'Modal image for terminal execution.',
+    type: 'string'
+  },
+  'terminal.daytona_image': {
+    category: 'advanced',
+    description: 'Daytona image for terminal execution.',
+    type: 'string'
+  },
+  'tool_output.max_bytes': {
+    category: 'advanced',
+    description: 'Maximum terminal output bytes shown to the model.',
+    type: 'number'
+  },
+  'tool_output.max_lines': {
+    category: 'advanced',
+    description: 'Maximum file page lines.',
+    type: 'number'
+  },
+  'tool_output.max_line_length': {
+    category: 'advanced',
+    description: 'Maximum output line length.',
+    type: 'number'
+  },
+  'checkpoints.max_snapshots': {
+    category: 'advanced',
+    description: 'Maximum checkpoint snapshots.',
+    type: 'number'
+  },
+  'agent.max_turns': {
+    category: 'agent',
+    description: 'Maximum agent steps per run.',
+    type: 'number'
+  },
+  'agent.api_max_retries': {
+    category: 'agent',
+    description: 'API retry count.',
+    type: 'number'
+  },
+  'agent.service_tier': {
+    category: 'agent',
+    description: 'Optional model service tier.',
+    type: 'string'
+  },
+  'agent.tool_use_enforcement': {
+    category: 'agent',
+    description: 'Require explicit tool-use discipline when supported.',
+    type: 'boolean'
+  },
+  'delegation.model': {
+    category: 'delegation',
+    description: 'Subagent model.',
+    type: 'string'
+  },
+  'delegation.provider': {
+    category: 'delegation',
+    description: 'Subagent provider.',
+    type: 'string'
+  },
+  'delegation.max_iterations': {
+    category: 'delegation',
+    description: 'Subagent turn limit.',
+    type: 'number'
+  },
+  'delegation.max_concurrent_children': {
+    category: 'delegation',
+    description: 'Parallel subagent limit.',
+    type: 'number'
+  },
+  'delegation.child_timeout_seconds': {
+    category: 'delegation',
+    description: 'Subagent timeout in seconds.',
+    type: 'number'
+  },
+  'delegation.reasoning_effort': {
+    category: 'delegation',
+    description: 'Subagent reasoning effort.',
+    type: 'select',
+    options: ['', 'minimal', 'low', 'medium', 'high', 'xhigh']
+  },
+  'updates.non_interactive_local_changes': {
+    category: 'updates',
+    description: 'How in-app updates handle local source edits.',
+    type: 'select',
+    options: ['stash', 'discard']
+  }
+}
+
 const BRIDGE_REST_ROUTES = [
   { method: 'GET', path: '/api/status' },
   { method: 'GET', path: '/api/logs' },
@@ -200,6 +652,46 @@ function resolveCodexExecutable() {
   }
 
   return 'codex'
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function deepMergeConfig(base, patch) {
+  const next = { ...base }
+
+  for (const [key, value] of Object.entries(patch || {})) {
+    if (isPlainObject(value) && isPlainObject(next[key])) {
+      next[key] = deepMergeConfig(next[key], value)
+    } else {
+      next[key] = value
+    }
+  }
+
+  return next
+}
+
+function setConfigPath(target, dottedPath, value) {
+  const parts = String(dottedPath || '').split('.').filter(Boolean)
+  if (!parts.length) return
+  let cursor = target
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    const part = parts[index]
+    if (part === '__proto__' || part === 'constructor' || part === 'prototype') return
+    if (!isPlainObject(cursor[part])) cursor[part] = {}
+    cursor = cursor[part]
+  }
+  const leaf = parts[parts.length - 1]
+  if (leaf === '__proto__' || leaf === 'constructor' || leaf === 'prototype') return
+  cursor[leaf] = value
+}
+
+function applyFlatConfigFields(target, patch) {
+  for (const [key, value] of Object.entries(patch || {})) {
+    if (!key.includes('.')) continue
+    setConfigPath(target, key, value)
+  }
 }
 
 class CodexAppServerClient {
@@ -425,7 +917,7 @@ class CodexAppServerClient {
       ephemeral: false,
       approvalPolicy: 'never',
       sandbox: 'danger-full-access',
-      sessionStartSource: 'hermes-candidate',
+      sessionStartSource: 'startup',
       threadSource: 'user',
       baseInstructions
     })
@@ -491,6 +983,7 @@ function createOplCodexGateway({
     reasoning_effort: 'xhigh',
     base_url: 'https://gflabtoken.cn/v1'
   }
+  let candidateConfigPatch = {}
   let maintenancePromise = null
   let codexClient = appServerClient || null
 
@@ -613,25 +1106,123 @@ function createOplCodexGateway({
   }
 
   function currentConfigRecord() {
-    return {
+    const base = {
       agent: {
+        image_input_mode: 'auto',
+        max_turns: 50,
+        api_max_retries: 2,
         reasoning_effort: configuredModel.reasoning_effort,
         service_tier: '',
+        tool_use_enforcement: false,
         personalities: {}
       },
       display: {
         personality: '',
-        skin: 'system'
+        skin: 'system',
+        show_reasoning: true
       },
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
       terminal: {
-        cwd: defaultCwd()
+        cwd: defaultCwd(),
+        backend: 'local',
+        timeout: 120,
+        persistent_shell: true,
+        env_passthrough: [],
+        docker_image: '',
+        singularity_image: '',
+        modal_image: '',
+        daytona_image: ''
+      },
+      code_execution: {
+        mode: 'project'
+      },
+      approvals: {
+        mode: 'manual',
+        timeout: 300,
+        mcp_reload_confirm: true
+      },
+      command_allowlist: [],
+      security: {
+        redact_secrets: true,
+        allow_private_urls: false
+      },
+      browser: {
+        allow_private_urls: false,
+        auto_local_for_private_urls: true
+      },
+      checkpoints: {
+        enabled: false,
+        max_snapshots: 20
+      },
+      memory: {
+        memory_enabled: false,
+        user_profile_enabled: false,
+        memory_char_limit: 12000,
+        user_char_limit: 4000,
+        provider: ''
+      },
+      context: {
+        engine: 'default'
+      },
+      compression: {
+        enabled: false,
+        threshold: 0,
+        target_ratio: 0.5,
+        protect_last_n: 4
       },
       stt: {
-        enabled: false
+        enabled: false,
+        provider: 'local',
+        local: { model: 'base', language: '' },
+        openai: { model: 'whisper-1' },
+        groq: { model: '' },
+        mistral: { model: '' },
+        elevenlabs: {
+          model_id: 'scribe_v1',
+          language_code: '',
+          tag_audio_events: false,
+          diarize: false
+        }
+      },
+      tts: {
+        provider: '',
+        edge: { voice: '' },
+        openai: { model: 'gpt-4o-mini-tts', voice: 'alloy' },
+        elevenlabs: { voice_id: '', model_id: 'eleven_multilingual_v2' },
+        xai: { voice_id: '', language: 'en' },
+        minimax: { model: '', voice_id: '' },
+        mistral: { model: '', voice_id: '' },
+        gemini: { model: '', voice: '' },
+        neutts: { model: '', device: 'cpu' },
+        kittentts: { model: '', voice: '' },
+        piper: { voice: '' }
       },
       voice: {
-        max_recording_seconds: 60
+        record_key: '',
+        max_recording_seconds: 60,
+        auto_tts: false
       },
+      toolsets: ['terminal', 'file'],
+      file_read_max_chars: 200000,
+      tool_output: {
+        max_bytes: 200000,
+        max_lines: 2000,
+        max_line_length: 4000
+      },
+      delegation: {
+        model: configuredModel.model,
+        provider: configuredModel.provider,
+        max_iterations: 3,
+        max_concurrent_children: 2,
+        child_timeout_seconds: 900,
+        reasoning_effort: configuredModel.reasoning_effort
+      },
+      updates: {
+        non_interactive_local_changes: 'stash'
+      },
+      model_context_length: 0,
+      fallback_providers: [],
+      mcp_servers: {},
       model: configuredModel.model,
       provider: configuredModel.provider,
       providers: {
@@ -641,34 +1232,48 @@ function createOplCodexGateway({
         }
       }
     }
+    const merged = deepMergeConfig(base, candidateConfigPatch)
+    merged.model = configuredModel.model
+    merged.provider = configuredModel.provider
+    merged.providers = {
+      gflab: {
+        base_url: configuredModel.base_url,
+        models: ['gpt-5.5', 'auto']
+      }
+    }
+    merged.agent = {
+      ...(isPlainObject(merged.agent) ? merged.agent : {}),
+      reasoning_effort: configuredModel.reasoning_effort
+    }
+    merged.delegation = {
+      ...(isPlainObject(merged.delegation) ? merged.delegation : {}),
+      model: configuredModel.model,
+      provider: configuredModel.provider,
+      reasoning_effort: configuredModel.reasoning_effort
+    }
+    return merged
   }
 
   function configSchema() {
     return {
-      category_order: ['agent', 'display', 'terminal', 'voice'],
-      fields: {
-        'agent.reasoning_effort': {
-          category: 'agent',
-          description: 'Default Codex reasoning effort.',
-          type: 'select',
-          options: ['minimal', 'low', 'medium', 'high', 'xhigh']
-        },
-        'terminal.cwd': {
-          category: 'terminal',
-          description: 'Default workspace directory.',
-          type: 'string'
-        },
-        'voice.max_recording_seconds': {
-          category: 'voice',
-          description: 'Maximum voice recording length.',
-          type: 'number'
-        },
-        'stt.enabled': {
-          category: 'voice',
-          description: 'Speech to text is not enabled in the OPL candidate adapter.',
-          type: 'boolean'
-        }
-      }
+      category_order: [
+        'model',
+        'display',
+        'terminal',
+        'approvals',
+        'security',
+        'browser',
+        'checkpoints',
+        'memory',
+        'context',
+        'compression',
+        'voice',
+        'advanced',
+        'agent',
+        'delegation',
+        'updates'
+      ],
+      fields: CANDIDATE_CONFIG_FIELDS
     }
   }
 
@@ -1006,6 +1611,14 @@ function createOplCodexGateway({
       if (typeof config?.model === 'string') {
         configuredModel = { ...configuredModel, model: config.model }
       }
+      if (typeof config?.provider === 'string') {
+        configuredModel = { ...configuredModel, provider: config.provider }
+      }
+      const nextConfig = deepMergeConfig(currentConfigRecord(), config)
+      applyFlatConfigFields(nextConfig, config)
+      nextConfig.model = configuredModel.model
+      nextConfig.provider = configuredModel.provider
+      candidateConfigPatch = nextConfig
       json(response, 200, { ok: true })
       return
     }
@@ -1045,11 +1658,21 @@ function createOplCodexGateway({
       json(response, 200, {
         OPENAI_API_KEY: {
           advanced: false,
-          category: 'OPL model access',
-          description: 'API key used by the One Person Lab Codex app-server adapter.',
+          category: 'provider',
+          description: 'OpenAI-compatible model access key used by the One Person Lab Codex app-server adapter.',
           is_password: true,
           is_set: Boolean(setup.provider_configured),
           redacted_value: setup.provider_configured ? '••••••••' : null,
+          tools: ['codex'],
+          url: 'https://platform.openai.com/api-keys'
+        },
+        OPENAI_BASE_URL: {
+          advanced: true,
+          category: 'provider',
+          description: 'OpenAI-compatible base URL used by configured One Person Lab model access.',
+          is_password: false,
+          is_set: Boolean(configuredModel.base_url),
+          redacted_value: configuredModel.base_url || null,
           tools: ['codex'],
           url: null
         }
@@ -1063,6 +1686,11 @@ function createOplCodexGateway({
     if (pathname === '/api/env') {
       try {
         const body = await readBody(request)
+        if (body?.key === 'OPENAI_BASE_URL') {
+          configuredModel = { ...configuredModel, base_url: String(body.value || '').trim() || configuredModel.base_url }
+          json(response, 200, { ok: true })
+          return
+        }
         if (body?.key !== 'OPENAI_API_KEY') {
           json(response, 400, { ok: false, message: 'OPL candidate only accepts the OpenAI-compatible model access API key.' })
           return

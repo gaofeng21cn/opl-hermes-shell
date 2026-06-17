@@ -53,6 +53,13 @@ export const PROVIDER_GROUPS: ProviderPrefix[] = [
     priority: 1
   },
   {
+    prefix: 'OPENAI_',
+    name: 'OpenAI',
+    description: 'OpenAI-compatible API access',
+    docsUrl: 'https://platform.openai.com/api-keys',
+    priority: 1.5
+  },
+  {
     prefix: 'ANTHROPIC_',
     name: 'Anthropic',
     description: 'Claude API access (Sonnet, Opus, Haiku)',

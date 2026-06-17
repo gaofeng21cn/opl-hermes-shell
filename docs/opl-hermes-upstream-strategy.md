@@ -91,6 +91,40 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
 Hermes 设置页、skills、toolsets、MCP、profiles 或 cron 变空的改动，都默认不是
 合格的第一层定制。
 
+## 设置页空态归因规则
+
+Hermes Desktop 官方设置页导航包含 `Model`、`Chat`、`Appearance`、`Workspace`、
+`Safety`、`Memory & Context`、`Voice`、`Advanced`、`Providers`、`Gateway`、
+`Tools & Keys`、`MCP`、`Notifications`、`Archived Chats` 和 `About`。这些导航来自
+官方 renderer，不是 OPL 定制新增。
+
+排查设置页空白时，先按数据来源归因：
+
+- `Chat`、`Workspace`、`Safety`、`Memory & Context`、`Voice`、`Advanced`
+  通过 `/api/config`、`/api/config/defaults` 和 `/api/config/schema` 渲染。
+  若候选 adapter 的 schema 缺少对应 `SECTIONS.keys` 字段，页面会显示“无可配置项”。
+  这是 adapter 数据面过窄导致的假空白，不是中文翻译问题，也不是官方 renderer
+  本来没有实现。
+- `Providers` 通过 `/api/providers/oauth` 和 `/api/env` 渲染。Provider API key
+  必须满足 `EnvVarInfo.category === "provider"`，且 env key 能被
+  `PROVIDER_GROUPS` 归入非 `Other` 分组，否则页面会显示没有 provider key。OPL
+  adapter 暴露 `OPENAI_API_KEY` 时必须使用 provider category，并确保 `OPENAI_`
+  有稳定分组。
+- `Tools & Keys` 只显示 `tool`、`setting` 或非 channel-managed `messaging`
+  category。若当前候选没有真实工具密钥或网关级设置密钥，显示空态是官方 UI 的正常
+  行为；不要为了填满页面伪造无法保存或没有 runtime owner 的密钥。
+- `MCP` 读取 `/api/config` 的 `mcp_servers`。没有配置 MCP server 时官方页面会显示
+  空态，但“新增/保存 MCP server”必须能通过 `/api/config` 在 adapter 生命周期内
+  闭环，否则属于候选 adapter bug。
+- `Appearance` 和 `Notifications` 主要是本地 renderer/desktop preference，不依赖
+  Hermes backend schema。`Archived Chats` 没有归档会话时显示空态，属于正常数据空态。
+
+当前 OPL fallback adapter 的责任是让官方 renderer 的基础设置交互可用：补齐上述
+config schema、provider env catalog 和 adapter 生命周期内的 config save/readback。
+它仍不是完整 Hermes backend replacement；skills、toolsets、messaging、analytics、
+正式 persisted sessions、OAuth provider accounts、update runtime 等深层能力继续由
+官方 Hermes backend 或后续经过 App repo adoption gate 的 OPL bridge 承接。
+
 ## 必须先对比再接入的面
 
 以下内容不能按旧 AionUI/AGUI 稳定线直接移植到 Hermes：

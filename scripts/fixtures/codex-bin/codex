@@ -49,6 +49,17 @@ function handle(request) {
   }
 
   if (request.method === 'thread/start') {
+    if (request.params?.sessionStartSource !== 'startup') {
+      write({
+        jsonrpc: '2.0',
+        id: request.id,
+        error: {
+          code: -32600,
+          message: 'Invalid request: unknown variant, expected `startup` or `clear`'
+        }
+      })
+      return
+    }
     respond(request.id, {
       thread: { id: 'thread-fixture' },
       cwd: request.params?.cwd || process.cwd(),

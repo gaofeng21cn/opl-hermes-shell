@@ -245,10 +245,73 @@ test('OPL Codex gateway returns renderer-safe official UI bootstrap REST shapes'
     const schema = await requestJson(descriptor.baseUrl, '/api/config/schema')
     assert.equal(schema.response.status, 200)
     assert.equal(schema.body.fields['agent.reasoning_effort'].type, 'select')
+    assert.equal(schema.body.fields['display.personality'].category, 'display')
+    assert.equal(schema.body.fields['approvals.mode'].type, 'select')
+    assert.equal(schema.body.fields['memory.memory_enabled'].type, 'boolean')
+    assert.equal(schema.body.fields['terminal.backend'].type, 'select')
 
     const cron = await requestJson(descriptor.baseUrl, '/api/cron/jobs')
     assert.equal(cron.response.status, 200)
     assert.deepEqual(cron.body, [])
+  })
+})
+
+test('OPL Codex gateway exposes enough config schema for non-empty official settings sections', async () => {
+  await withGateway(async descriptor => {
+    const schema = await getJson(descriptor.baseUrl, '/api/config/schema')
+    const fields = schema.fields
+
+    for (const key of ['display.personality', 'timezone', 'display.show_reasoning', 'agent.image_input_mode']) {
+      assert.ok(fields[key], `chat field ${key} should exist`)
+    }
+    for (const key of ['approvals.mode', 'security.redact_secrets', 'browser.allow_private_urls', 'checkpoints.enabled']) {
+      assert.ok(fields[key], `safety field ${key} should exist`)
+    }
+    for (const key of ['memory.memory_enabled', 'context.engine', 'compression.enabled']) {
+      assert.ok(fields[key], `memory field ${key} should exist`)
+    }
+    for (const key of ['toolsets', 'terminal.backend', 'agent.max_turns', 'delegation.reasoning_effort']) {
+      assert.ok(fields[key], `advanced field ${key} should exist`)
+    }
+  })
+})
+
+test('OPL Codex gateway persists Hermes-compatible config edits during the adapter session', async () => {
+  await withGateway(async descriptor => {
+    const updated = await requestJson(descriptor.baseUrl, '/api/config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        config: {
+          display: { personality: 'technical', show_reasoning: false },
+          approvals: { mode: 'smart' },
+          memory: { memory_enabled: true },
+          mcp_servers: {
+            filesystem: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem'] }
+          }
+        }
+      })
+    })
+    assert.equal(updated.response.status, 200)
+
+    const config = await getJson(descriptor.baseUrl, '/api/config')
+    assert.equal(config.display.personality, 'technical')
+    assert.equal(config.display.show_reasoning, false)
+    assert.equal(config.approvals.mode, 'smart')
+    assert.equal(config.memory.memory_enabled, true)
+    assert.equal(config.mcp_servers.filesystem.command, 'npx')
+  })
+})
+
+test('OPL Codex gateway exposes provider env catalog in the categories expected by Hermes settings', async () => {
+  await withGateway(async descriptor => {
+    const env = await getJson(descriptor.baseUrl, '/api/env')
+
+    assert.equal(env.OPENAI_API_KEY.category, 'provider')
+    assert.equal(env.OPENAI_API_KEY.is_password, true)
+    assert.equal(env.OPENAI_API_KEY.is_set, true)
+    assert.equal(env.OPENAI_BASE_URL.category, 'provider')
+    assert.equal(env.OPENAI_BASE_URL.advanced, true)
   })
 })
 
@@ -360,6 +423,7 @@ test('OPL Codex gateway streams message.delta text payloads', async () => {
         ['initialize', 'thread/start', 'turn/start']
       )
       assert.equal(fixtureCalls[1].params.cwd, process.env.OPL_HERMES_DEFAULT_CWD || process.env.PWD || process.env.HOME || process.cwd())
+      assert.equal(fixtureCalls[1].params.sessionStartSource, 'startup')
       assert.equal(fixtureCalls[2].params.threadId, 'thread-fixture')
       socket.close()
     })

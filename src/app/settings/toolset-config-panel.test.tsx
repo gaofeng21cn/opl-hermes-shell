@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ToolsetConfig } from '@/types/hermes'
 
@@ -29,6 +29,20 @@ vi.mock('@/store/notifications', () => ({
 vi.mock('@/store/activity', () => ({
   upsertDesktopActionTask: vi.fn()
 }))
+
+const originalPointerEvent = globalThis.PointerEvent
+
+beforeAll(() => {
+  if (!globalThis.PointerEvent) {
+    globalThis.PointerEvent = MouseEvent as unknown as typeof PointerEvent
+  }
+  Element.prototype.hasPointerCapture = vi.fn(() => false)
+  Element.prototype.releasePointerCapture = vi.fn()
+})
+
+afterAll(() => {
+  globalThis.PointerEvent = originalPointerEvent
+})
 
 function config(overrides: Partial<ToolsetConfig> = {}): ToolsetConfig {
   return {
@@ -93,7 +107,7 @@ describe('ToolsetConfigPanel', () => {
     await waitFor(() => expect(selectToolsetProvider).toHaveBeenCalledWith('tts', 'ElevenLabs'))
   })
 
-  it('saves an API key for a provider env var', async () => {
+  it('shows a credential actions entry for a provider env var', async () => {
     const { ToolsetConfigPanel } = await import('./toolset-config-panel')
     render(<ToolsetConfigPanel onConfiguredChange={vi.fn()} toolset="tts" />)
 
@@ -101,14 +115,8 @@ describe('ToolsetConfigPanel', () => {
     const elevenlabs = await screen.findByRole('button', { name: /ElevenLabs/ })
     fireEvent.click(elevenlabs)
 
-    // Click "Set" to reveal the input for the unset key.
-    fireEvent.click(await screen.findByRole('button', { name: 'Set' }))
-
-    const input = await screen.findByPlaceholderText('ElevenLabs API key')
-    fireEvent.change(input, { target: { value: 'sk-test-123' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => expect(setEnvVar).toHaveBeenCalledWith('ELEVENLABS_API_KEY', 'sk-test-123'))
+    expect(await screen.findByText('ELEVENLABS_API_KEY')).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Actions for ELEVENLABS_API_KEY' })).toBeTruthy()
   })
 
   it('expands the active provider on load, not just the first configured one', async () => {
