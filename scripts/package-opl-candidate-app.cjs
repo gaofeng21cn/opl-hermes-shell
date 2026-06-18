@@ -137,7 +137,7 @@ const manifest = {
       'item/agentMessage/delta': 'message.delta',
       'turn/completed': 'message.complete'
     },
-    planned_opl_executor_adapter: 'deeper OPL app state/action and route receipts above Hermes native backend',
+    planned_opl_executor_adapter: 'deeper OPL state/action diagnostics exposed through Codex Skill/Plugin/MCP-capable runtime, not GUI-side route receipts',
     forbidden_strategy: 'full backend replacement with minimal Codex shim',
     hermes_runtime_authority_transfer: false,
     codex_runtime_reference: 'codex app-server --listen stdio://'

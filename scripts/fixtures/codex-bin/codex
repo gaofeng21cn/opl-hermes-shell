@@ -71,6 +71,41 @@ function handle(request) {
     return
   }
 
+  if (request.method === 'skills/list') {
+    respond(request.id, {
+      data: [
+        {
+          cwd: request.params?.cwds?.[0] || process.cwd(),
+          errors: [],
+          skills: [
+            {
+              name: 'mas',
+              description: 'Use when Codex should operate MedAutoScience through its stable runtime.',
+              path: '/fixture/codex/skills/mas/SKILL.md',
+              scope: 'USER',
+              enabled: true
+            },
+            {
+              name: 'mag',
+              description: 'Use when Codex should operate Med Auto Grant through its grant-authoring runtime.',
+              path: '/fixture/codex/skills/mag/SKILL.md',
+              scope: 'USER',
+              enabled: true
+            },
+            {
+              name: 'rca',
+              description: 'Operate RedCube AI as the formal visual-deliverable domain app.',
+              path: '/fixture/codex/skills/rca/SKILL.md',
+              scope: 'USER',
+              enabled: true
+            }
+          ]
+        }
+      ]
+    })
+    return
+  }
+
   if (request.method === 'turn/start') {
     respond(request.id, { turn: { id: 'turn-fixture', status: 'running' } })
     write({

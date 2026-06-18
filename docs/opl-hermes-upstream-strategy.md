@@ -69,12 +69,12 @@ OPL 路线的默认策略是：
 - 先做 OPL 品牌化、App identity、图标和候选包名。
 - 后端入口先保留 Hermes Agent/Hermes Desktop 官方 backend contract，保证设置、
   skills、toolsets、MCP、profiles、cron、文件/预览、会话和 first-launch bootstrap
-  可用。Codex app-server-backed Hermes gateway adapter、OPL app state/action 和
-  MAS/MAG/RCA 在下一层作为执行器或 agent route 扩展接入，而不是替换整个
+  可用。Codex app-server-backed Hermes gateway adapter 只做 thin client；
+  MAS/MAG/RCA 通过 Codex Skill/Plugin/MCP 能力进入 Codex，由 Codex 作为顶层协调器判断是否调用，而不是替换整个
   `/api/*` 和 WebSocket backend。
 - 隐藏、降级或重命名 OPL 普通用户不需要的 provider/backend/agent runtime 概念。
-- 对 OPL 必需能力做最小薄适配：purpose labels、App-owned settings、runtime refs、
-  route receipts、page-state 和 first-run 等都必须先经过 App repo contract gate。
+- 对 OPL 必需能力做最小薄适配：Codex Skill shortcuts、App-owned settings、
+  runtime refs、page-state 和 first-run 等都必须先经过 App repo contract gate。
 
 这意味着 OPL 不从一开始把 Hermes 改造成另一个 AionUI/AGUI 稳定线，也不在没有功能
 对比的情况下把旧 App stable wrapper、state/action bridge、page-state mapping、
@@ -100,11 +100,14 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   只写日志，不阻断官方 Hermes Desktop 启动。
 - **OPL i18n 范围**：普通 UI 只维护简体中文和英文。中文系统语言统一映射到 `zh`；
   日文和其它非支持语言回退英文。不要继续增加繁体中文或日文 locale 文件。
-- **Home purpose route chips**：MAS/MAG/RCA 是 App-owned purpose route，不是独立
-  backend 选择器。Home 允许在 intro/composer 附近显示轻量 `科研/MAS`、`基金/MAG`、
-  `演示/RCA` chips；点击 chip 只把对应 route prompt 写入 composer，让下一条
-  `prompt.submit` 走现有 purpose resolver。不要把这些 chips 扩展成首页 dashboard、
-  runtime truth 面板或 domain readiness 展示。
+- **Home Codex Skill chips**：MAS/MAG/RCA 是 Codex Skill/Plugin 能力入口，不是独立
+  backend 选择器，也不是 GUI 侧硬编码 route。Home 允许在 intro/composer 附近显示轻量
+  `科研/MAS`、`基金/MAG`、`演示/RCA` chips；点击 chip 只把 `$mas`、`$mag`、`$rca`
+  这类显式 Skill prompt 写入 composer。下一条 `prompt.submit` 会先通过 Codex
+  app-server 的 `skills/list` 读取真实可用 Skill；若 Codex 已发现对应 Skill，则用
+  `turn/start` 的 `{ type: "skill", name, path }` input 交给 Codex runtime。GUI 不读取
+  `SKILL.md`、不实现 Skill loader、不直接执行领域命令。不要把这些 chips 扩展成首页
+  dashboard、runtime truth 面板或 domain readiness 展示。
 - **OPL startup fallback**：没有可用 Hermes runtime 且进入 OPL fallback 时，按
   App repo 的四线模型分流。每次启动只做 marker、One Person Lab CLI、Codex CLI、
   `opl app state --profile fast --json` 模型访问探测和 Codex adapter startup 的轻量
@@ -119,9 +122,10 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   Hermes-compatible adapter：renderer 仍调用 `session.create` / `prompt.submit`，
   adapter 内部长期启动 `codex app-server --listen stdio://`，并映射
   `thread/start`、`turn/start`、`item/agentMessage/delta` 和 `turn/completed`。
-  该 adapter 仍不能成为 full backend replacement；后续 OPL app state/action、
-  MAS/MAG/RCA 深层 route receipt 必须作为 executor/agent route bridge 接入
-  Hermes 原生 backend 能力。
+  该 adapter 仍不能成为 full backend replacement；MAS/MAG/RCA 不能在 adapter 中
+  做关键词识别、`opl start` preflight、`opl app action execute` dry-run 或 route
+  receipt 注入。OPL app state/action、runtime refs 和 domain readback 后续只能作为
+  Codex 可调用 Skill/Plugin/MCP 能力或诊断面接入，不能让 GUI adapter 成为领域路由器。
 - **Candidate package wrapper**：生成本地 `.app` 候选包和 manifest，只用于显式
   technical verification。
 - **最小验证**：证明 upstream 基线仍在、OPL branding/adapter/package wrapper 存在，

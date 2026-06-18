@@ -96,8 +96,8 @@ maintenance. Chat runs through the OPL Codex gateway backed by
 The packaged candidate app is built by `npm run package` and verified by
 `npm run smoke:opl-first-run`. The smoke launches the real `.app`, checks the
 branded macOS executable, verifies missing-key/configured/hot-launch/fallback
-startup paths, sends a fixture Codex app-server turn, and records MAS route
-receipt evidence under `out/smoke-opl-first-run/summary.json`.
+startup paths, sends a fixture Codex app-server turn, and records MAS
+Skill-prompt evidence under `out/smoke-opl-first-run/summary.json`.
 
 ### Verification
 

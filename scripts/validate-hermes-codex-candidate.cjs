@@ -92,17 +92,19 @@ assert(oplCodexGateway.includes("'/api/providers/oauth'"), 'adapter must provide
 assert(oplCodexGateway.includes("providers: []"), 'adapter must report no OAuth providers for the OPL model access path')
 assert(oplCodexGateway.includes("session.create"), 'adapter must implement Hermes session.create RPC')
 assert(oplCodexGateway.includes("prompt.submit"), 'adapter must implement Hermes prompt.submit RPC')
-assert(oplCodexGateway.includes("purpose.route.resolve"), 'adapter must implement OPL purpose route resolve RPC')
-assert(oplCodexGateway.includes("'/api/opl/purpose-routes'"), 'adapter must expose purpose route catalog REST route')
-assert(oplCodexGateway.includes("Med Auto Science"), 'adapter must declare the MAS purpose route')
-assert(oplCodexGateway.includes("Med Auto Grant"), 'adapter must declare the MAG purpose route')
-assert(oplCodexGateway.includes("RedCube AI"), 'adapter must declare the RCA purpose route')
+assert(oplCodexGateway.includes("codex.skills"), 'adapter must expose Codex skill catalog RPC')
+assert(oplCodexGateway.includes("'/api/opl/codex-skills'"), 'adapter must expose Codex skill catalog REST route')
+assert(!oplCodexGateway.includes("purpose.route.resolve"), 'adapter must not implement GUI-side purpose route resolve RPC')
+assert(!oplCodexGateway.includes("'/api/opl/purpose-routes'"), 'adapter must not expose legacy purpose route catalog REST route')
+assert(oplCodexGateway.includes("Med Auto Science"), 'adapter must declare the MAS Codex skill shortcut')
+assert(oplCodexGateway.includes("Med Auto Grant"), 'adapter must declare the MAG Codex skill shortcut')
+assert(oplCodexGateway.includes("RedCube AI"), 'adapter must declare the RCA Codex skill shortcut')
 assert(
-  oplCodexGateway.includes("'app'") && oplCodexGateway.includes("'action'") && oplCodexGateway.includes("'execute'"),
-  'adapter must route purpose preflight through OPL app action execute'
+  !oplCodexGateway.includes("'app'") || !oplCodexGateway.includes("'action'") || !oplCodexGateway.includes("'execute'"),
+  'adapter must not preflight MAS/MAG/RCA through OPL app action execute'
 )
-assert(oplCodexGateway.includes("route.receipt"), 'adapter must emit successful purpose route receipts')
-assert(oplCodexGateway.includes("route.error"), 'adapter must emit purpose route blockers as errors')
+assert(!oplCodexGateway.includes("route.receipt"), 'adapter must not emit GUI-side purpose route receipts')
+assert(!oplCodexGateway.includes("route.error"), 'adapter must not emit GUI-side purpose route blockers')
 assert(oplCodexGateway.includes("tool.event"), 'adapter must bridge Codex tool events to Hermes-compatible events')
 assert(oplCodexGateway.includes("approval.event"), 'adapter must bridge Codex approval events to Hermes-compatible events')
 assert(oplCodexGateway.includes("config.get"), 'adapter must implement renderer-safe config.get RPC')
@@ -179,10 +181,10 @@ if (requireApp) {
   assert(settingsVisualSummary.assertions?.home_nonblank === true, 'packaged Settings visual smoke must prove a nonblank home')
   assert(settingsVisualSummary.assertions?.home_branding_opl === true, 'packaged Settings visual smoke must prove OPL home branding')
   assert(settingsVisualSummary.assertions?.home_legacy_hermes_wordmark_hidden === true, 'packaged Settings visual smoke must prove legacy Hermes home wordmark is hidden')
-  assert(settingsVisualSummary.assertions?.home_route_chips_visible === true, 'packaged Settings visual smoke must prove home route chips are visible')
-  assert(settingsVisualSummary.assertions?.home_route_chip_inserts_prompt === true, 'packaged Settings visual smoke must prove home route chips write into the composer')
+  assert(settingsVisualSummary.assertions?.home_skill_chips_visible === true, 'packaged Settings visual smoke must prove home Codex Skill chips are visible')
+  assert(settingsVisualSummary.assertions?.home_skill_chip_inserts_prompt === true, 'packaged Settings visual smoke must prove home Codex Skill chips write into the composer')
   assert(settingsVisualSummary.assertions?.model_access_gflabtoken_only === true, 'packaged Settings visual smoke must prove gflabtoken-only model access')
-  assert(settingsVisualSummary.assertions?.agents_capabilities_routes_visible === true, 'packaged Settings visual smoke must prove agents/capabilities routes are visible')
+  assert(settingsVisualSummary.assertions?.agents_capabilities_skills_visible === true, 'packaged Settings visual smoke must prove agents/capabilities Codex Skills are visible')
   assert(settingsVisualSummary.assertions?.forbidden_provider_controls_hidden === true, 'packaged Settings visual smoke must prove forbidden provider controls are hidden')
   for (const screenshot of Object.values(settingsVisualSummary.screenshots || {})) {
     assert(screenshot?.path && fs.existsSync(screenshot.path), `packaged Settings visual smoke screenshot missing: ${screenshot?.path}`)

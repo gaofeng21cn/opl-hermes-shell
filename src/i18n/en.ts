@@ -259,25 +259,25 @@ export const en: Translations = {
   },
 
   intro: {
-    body: 'Describe the work you want to move. For research, grant, or presentation tasks, start with one of the built-in agent routes below.',
-    routeAria: 'One Person Lab built-in agent routes',
+    body: 'Describe the work you want to move. For research, grant, or presentation tasks, start with one of the Codex Skill shortcuts below.',
+    routeAria: 'One Person Lab Codex Skill shortcuts',
     routes: {
       mas: {
         description: 'Med Auto Science',
         label: 'Research',
-        prompt: 'Research / MAS: ',
+        prompt: '$mas Use Med Auto Science to help me move this research task: ',
         shortLabel: 'MAS'
       },
       mag: {
         description: 'Med Auto Grant',
         label: 'Grant',
-        prompt: 'Grant / MAG: ',
+        prompt: '$mag Use Med Auto Grant to help me move this grant task: ',
         shortLabel: 'MAG'
       },
       rca: {
         description: 'RedCube AI',
         label: 'Presentation',
-        prompt: 'Presentation / RCA: ',
+        prompt: '$rca Use RedCube AI to help me move this presentation task: ',
         shortLabel: 'RCA'
       }
     }
@@ -620,18 +620,19 @@ export const en: Translations = {
       failedLoad: 'Agents and capabilities failed to load',
       title: 'Agents & Capabilities',
       intro:
-        'These entries route ordinary chat into One Person Lab owner surfaces. The GUI shows route receipts only; it does not write MAS/MAG/RCA domain truth, artifact bodies, or quality verdicts.',
-      emptyTitle: 'No agent routes available',
-      emptyDesc: 'This candidate did not receive a purpose route catalog from the OPL gateway.',
-      owner: 'Owner surface',
+        'These capabilities are loaded and invoked by Codex Skills/Plugins. The GUI only shows entry points and prompt shortcuts; it does not parse keywords, preflight MAS/MAG/RCA commands, or create domain receipts.',
+      emptyTitle: 'No Codex Skills available',
+      emptyDesc: 'This candidate did not receive a Codex Skill catalog from the OPL gateway.',
       project: 'Project',
-      action: 'Prepare action',
-      readback: 'Readback',
-      authority: 'Authority boundary',
-      aliases: 'Triggers',
-      routeReady: 'Routable',
-      routeBoundary: 'GUI routes only; domain authority stays with OPL owners',
-      noDomainTruth: 'No domain truth writes / no owner receipts / no domain-ready claims'
+      invocation: 'Invocation',
+      codexSkill: 'Codex Skill',
+      skillPath: 'Skill path',
+      ordinaryPath: 'Ordinary path',
+      boundary: 'Authority boundary',
+      skillReady: 'Codex found',
+      skillMissing: 'Not found by Codex',
+      skillBoundary: 'Codex chooses and invokes it; GUI does not own domain authority',
+      noDomainTruth: 'GUI does not write domain truth / owner receipts / domain-ready claims'
     },
     sessions: {
       loading: 'Loading archived sessions…',

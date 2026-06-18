@@ -49,69 +49,6 @@ async function withGateway(fn, options = {}) {
   }
 }
 
-function createOplCommandFixture(overrides = {}) {
-  const calls = []
-  const runner = async args => {
-    calls.push(args)
-    const command = args.join(' ')
-    if (command === 'app state --profile fast --json') {
-      const body = overrides.appState || {
-        version: 'g2',
-        app_state: {
-          surface_kind: 'opl_app_state.v1',
-          runtime_source: { action_surface: 'opl app action execute' }
-        }
-      }
-      return { code: 0, stdout: JSON.stringify(body), stderr: '' }
-    }
-    if (command === 'start --project medautoscience --json') {
-      const body = overrides.masStart || {
-        version: 'g2',
-        product_entry_start: {
-          project_id: 'medautoscience',
-          selected_mode_id: 'open_product_entry',
-          selected_mode: { command: 'opl app product-entry-status --agent med-autoscience --format json' }
-        }
-      }
-      return { code: 0, stdout: JSON.stringify(body), stderr: '' }
-    }
-    if (command === 'start --project medautogrant --json') {
-      const body = overrides.magStart || {
-        version: 'g2',
-        error: {
-          code: 'cli_usage_error',
-          message: 'The requested project does not currently expose a resolved product_entry_start surface.'
-        }
-      }
-      return { code: 2, stdout: JSON.stringify(body), stderr: '' }
-    }
-    if (command === 'start --project redcube --json') {
-      const body = overrides.rcaStart || {
-        version: 'g2',
-        error: {
-          code: 'cli_usage_error',
-          message: 'workspace_missing'
-        }
-      }
-      return { code: 2, stdout: JSON.stringify(body), stderr: '' }
-    }
-    if (command.startsWith('app action execute --action workspace_ensure ')) {
-      const body = overrides.workspaceEnsure || {
-        version: 'g2',
-        app_action_execution: {
-          action_id: 'workspace_ensure',
-          dry_run: true,
-          authority_boundary: { shell: 'implementation_adapter_only', can_write_domain_truth: false }
-        }
-      }
-      return { code: 0, stdout: JSON.stringify(body), stderr: '' }
-    }
-    throw new Error(`unexpected OPL fixture command: ${command}`)
-  }
-  runner.calls = calls
-  return runner
-}
-
 async function getJson(baseUrl, path) {
   const response = await fetch(`${baseUrl}${path}`)
   assert.equal(response.ok, true, `${path} should return 2xx`)
@@ -294,24 +231,28 @@ test('OPL Codex gateway saves gflabtoken key through OPL configure-codex', async
 test('OPL Codex gateway scope helper documents executor bridge ownership', () => {
   const scope = describeOplCodexGatewayScope()
 
-  assert.equal(scope.mode, 'executor_agent_route_bridge')
+  assert.equal(scope.mode, 'codex_app_server_skill_first_adapter')
   assert.equal(scope.replacesHermesBackend, false)
   assert.equal(scope.executor, 'codex_app_server')
   assert.equal(isOplCodexBridgeRpcMethod('prompt.submit'), true)
   assert.equal(isOplCodexBridgeRpcMethod('config.get'), true)
   assert.equal(isOplCodexBridgeRpcMethod('config.set'), true)
+  assert.equal(isOplCodexBridgeRpcMethod('codex.skills'), true)
+  assert.equal(isOplCodexBridgeRpcMethod('purpose.route.resolve'), false)
   assert.equal(isOplCodexBridgeRpcMethod('commands.catalog'), false)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/model/options'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/model/auxiliary'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/providers/oauth'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/profiles'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/config'), true)
+  assert.equal(isOplCodexBridgeRestRoute('GET', '/api/opl/codex-skills'), true)
+  assert.equal(isOplCodexBridgeRestRoute('GET', '/api/opl/purpose-routes'), false)
   assert.equal(scope.upstreamHermesBackendOwns.includes('profiles'), true)
   assert.equal(scope.upstreamHermesBackendOwns.includes('command catalog'), true)
-  assert.equal(scope.purposeRoutes.some(route => route.purpose_id === 'mas'), true)
-  assert.equal(scope.purposeRoutes.some(route => route.purpose_id === 'mag'), true)
-  assert.equal(scope.purposeRoutes.some(route => route.purpose_id === 'rca'), true)
-  assert.equal(scope.purposeRoutes.some(route => route.purpose_id === 'opl'), true)
+  assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'mas' && skill.invocation === '$mas'), true)
+  assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'mag' && skill.invocation === '$mag'), true)
+  assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'rca' && skill.invocation === '$rca'), true)
+  assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'opl'), true)
 })
 
 test('OPL Codex gateway returns renderer-safe official UI bootstrap REST shapes', async () => {
@@ -484,22 +425,60 @@ test('OPL Codex gateway returns renderer-safe attachment RPC shapes', async () =
   })
 })
 
-test('OPL Codex gateway exposes MAS/MAG/RCA/OPL purpose route catalog', async () => {
-  await withGateway(async descriptor => {
-    const catalog = await getJson(descriptor.baseUrl, '/api/opl/purpose-routes')
-    assert.equal(catalog.surface_kind, 'opl_hermes_purpose_route_catalog.v1')
-    assert.equal(catalog.authority_boundary.creates_second_truth_source, false)
+test('OPL Codex gateway exposes MAS/MAG/RCA as Codex skill catalog', async () => {
+  const originalPath = process.env.PATH
+  const originalFixtureLog = process.env.OPL_CODEX_FIXTURE_LOG
+  const fixtureBin = require('node:path').join(__dirname, '..', 'scripts', 'fixtures', 'codex-bin')
+  const fixtureLog = require('node:path').join(require('node:os').tmpdir(), `opl-codex-skills-${process.pid}-${Date.now()}.jsonl`)
+  process.env.PATH = `${fixtureBin}${require('node:path').delimiter}${originalPath || ''}`
+  process.env.OPL_CODEX_FIXTURE_LOG = fixtureLog
 
-    const byId = new Map(catalog.routes.map(route => [route.purpose_id, route]))
-    for (const id of ['mas', 'mag', 'rca', 'opl']) {
-      assert.ok(byId.has(id), `missing ${id} route`)
-      assert.equal(byId.get(id).owner_surface.includes('opl '), true)
-      assert.equal(byId.get(id).codex_prompt_contract.includes('Do not'), true)
+  try {
+    await withGateway(async descriptor => {
+      const catalog = await getJson(descriptor.baseUrl, '/api/opl/codex-skills')
+      assert.equal(catalog.surface_kind, 'opl_hermes_codex_skill_catalog.v1')
+      assert.equal(catalog.authority_boundary.uses_codex_skill_plugin_authority, true)
+      assert.equal(catalog.authority_boundary.gui_executes_domain_commands, false)
+      assert.equal(catalog.authority_boundary.creates_second_truth_source, false)
+
+      const byId = new Map(catalog.skills.map(skill => [skill.skill_id, skill]))
+      for (const id of ['mas', 'mag', 'rca', 'opl']) {
+        assert.ok(byId.has(id), `missing ${id} skill`)
+        assert.equal(byId.get(id).codex_prompt_contract.includes('Codex'), true)
+      }
+      assert.equal(byId.get('mas').invocation, '$mas')
+      assert.equal(byId.get('mag').invocation, '$mag')
+      assert.equal(byId.get('rca').invocation, '$rca')
+      assert.equal(byId.get('mas').available, true)
+      assert.equal(byId.get('mas').codex_skill_name, 'mas')
+      assert.equal(byId.get('mas').codex_skill_path, '/fixture/codex/skills/mas/SKILL.md')
+      assert.equal(byId.get('opl').available, false)
+      assert.equal(byId.get('opl').codex_skill_path, null)
+
+      const rpcCatalog = await requestRpc(descriptor.wsUrl, 'codex.skills')
+      assert.equal(rpcCatalog.skills.length, catalog.skills.length)
+
+      const legacyRest = await requestJson(descriptor.baseUrl, '/api/opl/purpose-routes')
+      assert.equal(legacyRest.response.status, 501)
+      const legacyRpc = await requestRpc(descriptor.wsUrl, 'purpose.route.resolve', { purpose: 'mas' }).catch(error => error)
+      assert.match(String(legacyRpc.message || legacyRpc), /not full backend|official Hermes backend|unsupported/i)
+    })
+
+    const fixtureCalls = require('node:fs')
+      .readFileSync(fixtureLog, 'utf8')
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line))
+    assert.equal(fixtureCalls.some(call => call.method === 'skills/list'), true)
+  } finally {
+    process.env.PATH = originalPath
+    if (originalFixtureLog === undefined) {
+      delete process.env.OPL_CODEX_FIXTURE_LOG
+    } else {
+      process.env.OPL_CODEX_FIXTURE_LOG = originalFixtureLog
     }
-
-    const rpcCatalog = await requestRpc(descriptor.wsUrl, 'purpose.routes')
-    assert.equal(rpcCatalog.routes.length, catalog.routes.length)
-  })
+    require('node:fs').rmSync(fixtureLog, { force: true })
+  }
 })
 
 test('OPL Codex gateway exposes smoke WebSocket descriptor only when explicitly enabled', async () => {
@@ -524,42 +503,6 @@ test('OPL Codex gateway exposes smoke WebSocket descriptor only when explicitly 
       process.env.OPL_HERMES_SMOKE_EXPOSE_DESCRIPTOR = previous
     }
   }
-})
-
-test('OPL Codex gateway resolves purpose routes through OPL owner surfaces', async () => {
-  const runOplCommand = createOplCommandFixture()
-  await withGateway(
-    async descriptor => {
-      const mas = await requestRpc(descriptor.wsUrl, 'purpose.route.resolve', { purpose: 'mas' })
-      assert.equal(mas.ok, true)
-      assert.equal(mas.route.project_id, 'medautoscience')
-      assert.equal(mas.receipt.status, 'route_readback_ready')
-      assert.equal(mas.receipt.app_action_dry_run.ok, true)
-      assert.equal(mas.receipt.start_readback.ok, true)
-
-      const mag = await requestRpc(descriptor.wsUrl, 'purpose.route.resolve', { agent_id: 'mag' })
-      assert.equal(mag.ok, true)
-      assert.equal(mag.route.project_id, 'medautogrant')
-      assert.equal(mag.receipt.status, 'route_readback_with_blockers')
-      assert.equal(mag.receipt.start_readback.ok, false)
-
-      const rca = await requestRpc(descriptor.wsUrl, 'purpose.route.resolve', { project_id: 'redcube' })
-      assert.equal(rca.ok, true)
-      assert.equal(rca.route.project_id, 'redcube')
-      assert.equal(rca.receipt.status, 'route_readback_with_blockers')
-
-      const opl = await requestRpc(descriptor.wsUrl, 'purpose.route.resolve', { purpose: 'opl' })
-      assert.equal(opl.ok, true)
-      assert.equal(opl.route.project_id, 'one-person-lab')
-      assert.equal(opl.receipt.start_readback.command, 'opl app state --profile fast --json')
-    },
-    { runOplCommand }
-  )
-
-  assert.ok(runOplCommand.calls.some(args => args.join(' ') === 'start --project medautoscience --json'))
-  assert.ok(runOplCommand.calls.some(args => args.join(' ') === 'start --project medautogrant --json'))
-  assert.ok(runOplCommand.calls.some(args => args.join(' ') === 'start --project redcube --json'))
-  assert.ok(runOplCommand.calls.some(args => args.join(' ') === 'app state --profile fast --json'))
 })
 
 test('OPL Codex gateway starts without blocking on Codex or OPL purpose route probes', async () => {
@@ -648,12 +591,16 @@ test('OPL Codex gateway streams message.delta text payloads', async () => {
   }
 })
 
-test('OPL Codex gateway attaches purpose route receipts and errors to prompt.submit events', async () => {
+test('OPL Codex gateway leaves explicit skill invocation to Codex without route receipts', async () => {
   const originalPath = process.env.PATH
   const originalFixtureLog = process.env.OPL_CODEX_FIXTURE_LOG
   const fixtureBin = require('node:path').join(__dirname, '..', 'scripts', 'fixtures', 'codex-bin')
   const fixtureLog = require('node:path').join(require('node:os').tmpdir(), `opl-codex-purpose-${process.pid}-${Date.now()}.jsonl`)
-  const runOplCommand = createOplCommandFixture()
+  const calls = []
+  const runOplCommand = async args => {
+    calls.push(args)
+    throw new Error(`prompt.submit must not call OPL directly: ${args.join(' ')}`)
+  }
   process.env.PATH = `${fixtureBin}${require('node:path').delimiter}${originalPath || ''}`
   process.env.OPL_CODEX_FIXTURE_LOG = fixtureLog
 
@@ -671,7 +618,7 @@ test('OPL Codex gateway attaches purpose route receipts and errors to prompt.sub
         await requestRpcOnSocket(socket, 'prompt.submit', {
           session_id: session.session_id,
           purpose: 'mag',
-          text: '帮我准备基金申请路线'
+          text: '$mag 帮我准备基金申请路线'
         })
 
         await new Promise((resolve, reject) => {
@@ -682,17 +629,17 @@ test('OPL Codex gateway attaches purpose route receipts and errors to prompt.sub
               resolve()
             } else if (Date.now() - started > 3000) {
               clearInterval(timer)
-              reject(new Error('timeout waiting for purpose routed message.complete'))
+              reject(new Error('timeout waiting for skill-first message.complete'))
             }
           }, 20)
         })
 
         const routeSelected = frames.find(frame => frame.params?.type === 'route.selected')
-        assert.equal(routeSelected?.params?.payload?.route?.purpose_id, 'mag')
+        assert.equal(routeSelected, undefined)
+        const routeReceipt = frames.find(frame => frame.params?.type === 'route.receipt')
+        assert.equal(routeReceipt, undefined)
         const routeError = frames.find(frame => frame.params?.type === 'route.error')
-        assert.equal(routeError?.params?.payload?.receipt?.purpose_id, 'mag')
-        assert.equal(routeError?.params?.payload?.receipt?.status, 'route_readback_with_blockers')
-        assert.ok(routeError.params.payload.receipt.errors.length > 0)
+        assert.equal(routeError, undefined)
 
         const fixtureCalls = require('node:fs')
           .readFileSync(fixtureLog, 'utf8')
@@ -700,10 +647,13 @@ test('OPL Codex gateway attaches purpose route receipts and errors to prompt.sub
           .split('\n')
           .map(line => JSON.parse(line))
         const turnStart = fixtureCalls.find(call => call.method === 'turn/start')
-        const promptText = turnStart.params.input[0].text
-        assert.match(promptText, /OPL purpose route receipt/)
-        assert.match(promptText, /Med Auto Grant/)
-        assert.match(promptText, /Do not write MAG truth/)
+        assert.equal(fixtureCalls.some(call => call.method === 'skills/list'), true)
+        assert.deepEqual(turnStart.params.input[0], { type: 'skill', name: 'mag', path: '/fixture/codex/skills/mag/SKILL.md' })
+        const promptText = turnStart.params.input[1].text
+        assert.match(promptText, /\$mag 帮我准备基金申请路线/)
+        assert.doesNotMatch(promptText, /OPL purpose route receipt/)
+        assert.doesNotMatch(promptText, /Do not write MAG truth/)
+        assert.deepEqual(calls, [])
         socket.close()
       },
       { runOplCommand }
@@ -719,12 +669,16 @@ test('OPL Codex gateway attaches purpose route receipts and errors to prompt.sub
   }
 })
 
-test('OPL Codex gateway auto-routes ordinary Chinese research prompts to MAS', async () => {
+test('OPL Codex gateway does not auto-route ordinary Chinese research prompts to MAS', async () => {
   const originalPath = process.env.PATH
   const originalFixtureLog = process.env.OPL_CODEX_FIXTURE_LOG
   const fixtureBin = require('node:path').join(__dirname, '..', 'scripts', 'fixtures', 'codex-bin')
   const fixtureLog = require('node:path').join(require('node:os').tmpdir(), `opl-codex-mas-auto-${process.pid}-${Date.now()}.jsonl`)
-  const runOplCommand = createOplCommandFixture()
+  const calls = []
+  const runOplCommand = async args => {
+    calls.push(args)
+    throw new Error(`ordinary chat must not call OPL directly: ${args.join(' ')}`)
+  }
   process.env.PATH = `${fixtureBin}${require('node:path').delimiter}${originalPath || ''}`
   process.env.OPL_CODEX_FIXTURE_LOG = fixtureLog
 
@@ -752,14 +706,17 @@ test('OPL Codex gateway auto-routes ordinary Chinese research prompts to MAS', a
               resolve()
             } else if (Date.now() - started > 3000) {
               clearInterval(timer)
-              reject(new Error('timeout waiting for auto-routed message.complete'))
+              reject(new Error('timeout waiting for non-routed message.complete'))
             }
           }, 20)
         })
 
         const routeReceipt = frames.find(frame => frame.params?.type === 'route.receipt')
-        assert.equal(routeReceipt?.params?.payload?.receipt?.purpose_id, 'mas')
-        assert.equal(routeReceipt?.params?.payload?.receipt?.status, 'route_readback_ready')
+        assert.equal(routeReceipt, undefined)
+        const routeSelected = frames.find(frame => frame.params?.type === 'route.selected')
+        assert.equal(routeSelected, undefined)
+        const routeError = frames.find(frame => frame.params?.type === 'route.error')
+        assert.equal(routeError, undefined)
 
         const fixtureCalls = require('node:fs')
           .readFileSync(fixtureLog, 'utf8')
@@ -767,10 +724,14 @@ test('OPL Codex gateway auto-routes ordinary Chinese research prompts to MAS', a
           .split('\n')
           .map(line => JSON.parse(line))
         const turnStart = fixtureCalls.find(call => call.method === 'turn/start')
+        assert.equal(fixtureCalls.some(call => call.method === 'skills/list'), false)
+        assert.equal(turnStart.params.input.length, 1)
+        assert.equal(turnStart.params.input[0].type, 'text')
         const promptText = turnStart.params.input[0].text
-        assert.match(promptText, /OPL purpose route receipt/)
-        assert.match(promptText, /Med Auto Science/)
-        assert.match(promptText, /Do not write MAS truth/)
+        assert.match(promptText, /检查 MAS 糖尿病 002、003 两篇论文的进展/)
+        assert.doesNotMatch(promptText, /OPL purpose route receipt/)
+        assert.doesNotMatch(promptText, /Do not write MAS truth/)
+        assert.deepEqual(calls, [])
         socket.close()
       },
       { runOplCommand }

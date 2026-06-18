@@ -76,6 +76,73 @@ function shellSafeJson(value) {
   return JSON.stringify(value)
 }
 
+function codexAppServerFixtureSource() {
+  return `#!/usr/bin/env node
+const args = process.argv.slice(2)
+if (args.join(' ') !== 'app-server --listen stdio://') {
+  console.error('unexpected codex command: ' + args.join(' '))
+  process.exit(42)
+}
+let buffer = ''
+function write(message) {
+  process.stdout.write(JSON.stringify(message) + '\\n')
+}
+function respond(id, result) {
+  write({ jsonrpc: '2.0', id, result })
+}
+function skill(name, description) {
+  return { name, description, path: '/fixture/codex/skills/' + name + '/SKILL.md', scope: 'USER', enabled: true }
+}
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', chunk => {
+  buffer += chunk
+  let newlineIndex = buffer.indexOf('\\n')
+  while (newlineIndex >= 0) {
+    const line = buffer.slice(0, newlineIndex).trim()
+    buffer = buffer.slice(newlineIndex + 1)
+    if (line) handle(JSON.parse(line))
+    newlineIndex = buffer.indexOf('\\n')
+  }
+})
+function handle(request) {
+  if (request.method === 'initialize') {
+    respond(request.id, { serverInfo: { name: 'fixture-codex-app-server', version: '0.0.0' } })
+    return
+  }
+  if (request.method === 'skills/list') {
+    respond(request.id, {
+      data: [{
+        cwd: request.params?.cwds?.[0] || process.cwd(),
+        errors: [],
+        skills: [
+          skill('mas', 'Use when Codex should operate MedAutoScience through its stable runtime.'),
+          skill('mag', 'Use when Codex should operate Med Auto Grant through its grant-authoring runtime.'),
+          skill('rca', 'Operate RedCube AI as the formal visual-deliverable domain app.')
+        ]
+      }]
+    })
+    return
+  }
+  if (request.method === 'thread/start') {
+    respond(request.id, { thread: { id: 'thread-fixture' }, cwd: request.params?.cwd || process.cwd() })
+    return
+  }
+  if (request.method === 'turn/start') {
+    respond(request.id, { turn: { id: 'turn-fixture', status: 'running' } })
+    write({ jsonrpc: '2.0', method: 'turn/started', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'running' } } })
+    write({ jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { threadId: request.params?.threadId || 'thread-fixture', turnId: 'turn-fixture', delta: 'fixture codex response' } })
+    write({ jsonrpc: '2.0', method: 'turn/completed', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'completed' } } })
+    return
+  }
+  if (request.method === 'turn/abort') {
+    respond(request.id, { ok: true })
+    return
+  }
+  write({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'unsupported fixture method ' + request.method } })
+}
+`
+}
+
 function makeFixtureBin(sandbox) {
   const binDir = path.join(sandbox, 'bin')
   const callsPath = path.join(sandbox, 'opl-calls.log')
@@ -137,22 +204,6 @@ if (args.join(' ') === 'system reconcile-modules --json') {
   console.log(JSON.stringify({ ok: true, reconciled: true }))
   process.exit(0)
 }
-if (args.join(' ').startsWith('app action execute --action workspace_ensure ')) {
-  console.log(JSON.stringify({ ok: true, app_action_execution: { action_id: 'workspace_ensure', dry_run: true } }))
-  process.exit(0)
-}
-if (args.join(' ') === 'start --project medautoscience --json') {
-  console.log(JSON.stringify({ ok: true, product_entry_start: { project_id: 'medautoscience', selected_mode_id: 'open_product_entry' } }))
-  process.exit(0)
-}
-if (args.join(' ') === 'start --project medautogrant --json') {
-  console.log(JSON.stringify({ ok: true, product_entry_start: { project_id: 'medautogrant', selected_mode_id: 'open_product_entry' } }))
-  process.exit(0)
-}
-if (args.join(' ') === 'start --project redcube --json') {
-  console.log(JSON.stringify({ ok: true, product_entry_start: { project_id: 'redcube', selected_mode_id: 'open_product_entry' } }))
-  process.exit(0)
-}
 if (args.join(' ') === 'system configure-codex --api-key-stdin --json') {
   process.stdin.resume()
   process.stdin.on('end', () => console.log(JSON.stringify({ ok: true, configured: true })))
@@ -162,14 +213,7 @@ console.error('unexpected opl command: ' + args.join(' '))
 process.exit(42)
 `)
 
-  writeExecutable(path.join(binDir, 'codex'), `#!/usr/bin/env node
-const args = process.argv.slice(2)
-if (args.join(' ') !== 'app-server --listen stdio://') {
-  console.error('unexpected codex command: ' + args.join(' '))
-  process.exit(42)
-}
-process.stdin.resume()
-`)
+  writeExecutable(path.join(binDir, 'codex'), codexAppServerFixtureSource())
 
   return { binDir, callsPath }
 }
@@ -446,7 +490,7 @@ async function main() {
       cdp,
       `(() => {
         const intro = document.querySelector('[data-slot="aui_intro"]')
-        const mas = document.querySelector('[data-purpose-route="mas"]')
+        const mas = document.querySelector('[data-codex-skill="mas"]')
         if (!(intro instanceof HTMLElement) || !(mas instanceof HTMLButtonElement)) return false
         const rect = intro.getBoundingClientRect()
         const style = getComputedStyle(intro)
@@ -465,22 +509,22 @@ async function main() {
     const home = JSON.parse(await pageSnapshot(cdp))
     assert(home.bodyText.length > 20, 'home chrome is empty')
     assertTextIncludesAny(home.bodyText, ['One Person Lab'], 'home OPL branding')
-    assertTextIncludesAny(home.bodyText, ['科研', 'MAS'], 'home MAS route chip')
-    assertTextIncludesAny(home.bodyText, ['基金', 'MAG'], 'home MAG route chip')
-    assertTextIncludesAny(home.bodyText, ['演示', 'RCA'], 'home RCA route chip')
+    assertTextIncludesAny(home.bodyText, ['科研', 'MAS'], 'home MAS skill chip')
+    assertTextIncludesAny(home.bodyText, ['基金', 'MAG'], 'home MAG skill chip')
+    assertTextIncludesAny(home.bodyText, ['演示', 'RCA'], 'home RCA skill chip')
     assertTextExcludes(home.bodyText, ['HERMES AGENT'], 'home legacy Hermes wordmark')
     await cdp.eval(`(() => {
-      const button = document.querySelector('[data-purpose-route="mas"]')
+      const button = document.querySelector('[data-codex-skill="mas"]')
       if (!(button instanceof HTMLButtonElement)) {
-        throw new Error('MAS route chip button not found')
+        throw new Error('MAS skill chip button not found')
       }
       button.click()
       return true
     })()`)
     await waitForCondition(
       cdp,
-      `document.body.innerText.includes('科研 / MAS')`,
-      'MAS route chip inserts a route prompt'
+      `document.body.innerText.includes('$mas')`,
+      'MAS skill chip inserts a skill prompt'
     )
 
     await navigateHash(cdp, '/settings?tab=providers')
@@ -503,9 +547,10 @@ async function main() {
     )
     const agentsPng = await capture(cdp, path.join(options.artifactsDir, 'settings-agents.png'))
     const agents = JSON.parse(await pageSnapshot(cdp))
-    assertTextIncludesAny(agents.bodyText, ['科研', 'Med Auto Science', 'Research'], 'MAS route label')
-    assertTextIncludesAny(agents.bodyText, ['基金', 'Med Auto Grant', 'Grant'], 'MAG route label')
-    assertTextIncludesAny(agents.bodyText, ['演示', 'RedCube AI', 'Presentation'], 'RCA route label')
+    assertTextIncludesAny(agents.bodyText, ['Med Auto Science'], 'MAS skill label')
+    assertTextIncludesAny(agents.bodyText, ['Med Auto Grant'], 'MAG skill label')
+    assertTextIncludesAny(agents.bodyText, ['RedCube AI'], 'RCA skill label')
+    assertTextIncludesAny(agents.bodyText, ['$mas'], 'MAS skill invocation')
     assertTextExcludes(agents.bodyText, ['domain_ready', 'artifact_authority', 'quality_verdict'], 'agents ordinary settings')
 
     await navigateHash(cdp, '/settings?tab=about')
@@ -534,10 +579,10 @@ async function main() {
         home_nonblank: true,
         home_branding_opl: true,
         home_legacy_hermes_wordmark_hidden: true,
-        home_route_chips_visible: true,
-        home_route_chip_inserts_prompt: true,
+        home_skill_chips_visible: true,
+        home_skill_chip_inserts_prompt: true,
         model_access_gflabtoken_only: true,
-        agents_capabilities_routes_visible: true,
+        agents_capabilities_skills_visible: true,
         about_branding_visible: true,
         forbidden_provider_controls_hidden: true
       },

@@ -14,115 +14,58 @@ const {
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 const PRODUCT_NAME = 'One Person Lab Hermes Candidate'
 
-const PURPOSE_ROUTES = Object.freeze({
+const OPL_CODEX_SKILLS = Object.freeze({
   mas: {
-    purpose_id: 'mas',
-    aliases: [
-      'mas',
-      'medautoscience',
-      'med-auto-science',
-      'med-autoscience',
-      'study',
-      'paper',
-      'research',
-      '科研',
-      '论文',
-      '研究',
-      '糖尿病',
-      '医学'
-    ],
+    skill_id: 'mas',
+    invocation: '$mas',
     agent_id: 'mas',
     project_id: 'medautoscience',
     target_domain_id: 'med-autoscience',
     label: 'Med Auto Science',
-    owner_surface: 'opl foundry agents list --json',
-    start_surface: 'opl start --project medautoscience --json',
-    app_action_id: 'workspace_ensure',
-    app_action_payload: {
-      agent_id: 'mas',
-      project_id: 'medautoscience',
-      mode: 'auto',
-      title: 'Hermes MAS workspace route'
-    },
     ordinary_golden_path:
       'study -> stage -> domain owner receipt or typed blocker -> research artifact handoff',
     prompt_contract:
-      'Route this task through MAS / Med Auto Science authority. Use OPL CLI/App action/skill authority where available. Do not write MAS truth, owner receipts, typed blockers, memory body, or artifact body from this shell adapter.'
+      'Codex chooses and operates the MAS skill/plugin. The Hermes adapter does not preflight, route, or execute MAS commands.'
   },
   mag: {
-    purpose_id: 'mag',
-    aliases: ['mag', 'medautogrant', 'med-auto-grant', 'med-autogrant', 'grant', 'proposal', '基金', '标书', '申请书'],
+    skill_id: 'mag',
+    invocation: '$mag',
     agent_id: 'mag',
     project_id: 'medautogrant',
     target_domain_id: 'med-autogrant',
     label: 'Med Auto Grant',
-    owner_surface: 'opl foundry agents list --json',
-    start_surface: 'opl start --project medautogrant --json',
-    app_action_id: 'workspace_ensure',
-    app_action_payload: {
-      agent_id: 'mag',
-      project_id: 'medautogrant',
-      mode: 'auto',
-      title: 'Hermes MAG workspace route'
-    },
     ordinary_golden_path:
       'grant -> stage -> domain owner receipt or typed blocker -> grant deliverable handoff',
     prompt_contract:
-      'Route this task through MAG / Med Auto Grant authority. Use OPL CLI/App action/skill authority where available. Do not write MAG truth, owner receipts, typed blockers, memory body, or artifact body from this shell adapter.'
+      'Codex chooses and operates the MAG skill/plugin. The Hermes adapter does not preflight, route, or execute MAG commands.'
   },
   rca: {
-    purpose_id: 'rca',
-    aliases: ['rca', 'redcube', 'redcube-ai', 'deck', 'slides', 'visual', '演示', 'ppt', '幻灯片', '视觉'],
+    skill_id: 'rca',
+    invocation: '$rca',
     agent_id: 'rca',
     project_id: 'redcube',
     target_domain_id: 'redcube',
     label: 'RedCube AI',
-    owner_surface: 'opl foundry agents list --json',
-    start_surface: 'opl start --project redcube --json',
-    app_action_id: 'workspace_ensure',
-    app_action_payload: {
-      agent_id: 'rca',
-      project_id: 'redcube',
-      mode: 'auto',
-      title: 'Hermes RCA workspace route'
-    },
     ordinary_golden_path:
       'deck -> stage -> domain owner receipt or typed blocker -> visual deliverable handoff',
     prompt_contract:
-      'Route this task through RCA / RedCube AI authority. Use OPL CLI/App action/skill authority where available. Do not write RCA truth, owner receipts, typed blockers, memory body, or artifact body from this shell adapter.'
+      'Codex chooses and operates the RCA skill/plugin. The Hermes adapter does not preflight, route, or execute RCA commands.'
   },
   opl: {
-    purpose_id: 'opl',
-    aliases: ['opl', 'one-person-lab', 'framework', 'workspace', 'runtime'],
+    skill_id: 'opl',
+    invocation: 'natural language',
     agent_id: 'opl',
     project_id: 'one-person-lab',
     target_domain_id: 'one-person-lab',
     label: 'One Person Lab',
-    owner_surface: 'opl app state --profile fast --json',
-    start_surface: 'opl app state --profile fast --json',
-    app_action_id: null,
-    app_action_payload: null,
     ordinary_golden_path:
-      'purpose -> OPL App state/action boundary -> Codex executor or owner route -> refs-only receipt or next action',
+      'purpose -> Codex executor with installed OPL skills/plugins -> refs-only receipt or next action',
     prompt_contract:
-      'Route this task through OPL Framework/App authority. Use opl app state/action, OPL CLI, and Codex skills as the owner surfaces. Do not create a second runtime truth source in the Hermes adapter.'
+      'Codex owns OPL skill/plugin/tool selection. The Hermes adapter stays a thin app-server client.'
   }
 })
 
-function normalizePurposeToken(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[_\s]+/g, '-')
-}
-
-const PURPOSE_ROUTE_ALIASES = new Map()
-for (const [routeId, route] of Object.entries(PURPOSE_ROUTES)) {
-  PURPOSE_ROUTE_ALIASES.set(normalizePurposeToken(routeId), routeId)
-  for (const alias of route.aliases) {
-    PURPOSE_ROUTE_ALIASES.set(normalizePurposeToken(alias), routeId)
-  }
-}
+const OPL_CODEX_SKILL_IDS = Object.freeze(Object.keys(OPL_CODEX_SKILLS))
 
 const CANDIDATE_CONFIG_FIELDS = {
   model_context_length: {
@@ -599,7 +542,7 @@ const BRIDGE_REST_ROUTES = [
   { method: 'POST', path: '/api/model/set' },
   { method: 'GET', path: '/api/model/auxiliary' },
   { method: 'GET', path: '/api/model/recommended-default' },
-  { method: 'GET', path: '/api/opl/purpose-routes' },
+  { method: 'GET', path: '/api/opl/codex-skills' },
   { method: 'GET', path: '/api/smoke/connection' }
 ]
 
@@ -615,8 +558,7 @@ const BRIDGE_RPC_METHODS = [
   'config.set',
   'setup.status',
   'setup.runtime_check',
-  'purpose.routes',
-  'purpose.route.resolve',
+  'codex.skills',
   'model.options',
   'file.attach',
   'image.attach',
@@ -645,23 +587,38 @@ function isOplCodexBridgeRpcMethod(method) {
   return BRIDGE_RPC_METHOD_SET.has(String(method || ''))
 }
 
+function canonicalSkillName(value) {
+  return String(value || '').trim().replace(/^\$/, '').toLowerCase()
+}
+
+function requestedCodexSkillIds(text) {
+  const matches = String(text || '').matchAll(/(?:^|\s)\$([a-z][a-z0-9_-]*)\b/gi)
+  const requested = []
+  const seen = new Set()
+  for (const match of matches) {
+    const skillId = canonicalSkillName(match[1])
+    if (!OPL_CODEX_SKILLS[skillId] || seen.has(skillId)) continue
+    requested.push(skillId)
+    seen.add(skillId)
+  }
+  return requested
+}
+
 function describeOplCodexGatewayScope() {
   return {
-    mode: 'executor_agent_route_bridge',
+    mode: 'codex_app_server_skill_first_adapter',
     replacesHermesBackend: false,
     executor: 'codex_app_server',
     restRoutes: BRIDGE_REST_ROUTES.map(route => ({ ...route })),
     rpcMethods: [...BRIDGE_RPC_METHODS],
-    purposeRoutes: Object.values(PURPOSE_ROUTES).map(route => ({
-      purpose_id: route.purpose_id,
-      agent_id: route.agent_id,
-      project_id: route.project_id,
-      target_domain_id: route.target_domain_id,
-      label: route.label,
-      owner_surface: route.owner_surface,
-      start_surface: route.start_surface,
-      app_action_id: route.app_action_id,
-      ordinary_golden_path: route.ordinary_golden_path
+    codexSkills: Object.values(OPL_CODEX_SKILLS).map(skill => ({
+      skill_id: skill.skill_id,
+      invocation: skill.invocation,
+      agent_id: skill.agent_id,
+      project_id: skill.project_id,
+      target_domain_id: skill.target_domain_id,
+      label: skill.label,
+      ordinary_golden_path: skill.ordinary_golden_path
     })),
     upstreamHermesBackendOwns: [
       'config',
@@ -671,7 +628,7 @@ function describeOplCodexGatewayScope() {
       'persisted sessions',
       'session search',
       'cron',
-      'skills',
+      'Hermes skills UI',
       'toolsets',
       'messaging',
       'analytics',
@@ -1069,7 +1026,15 @@ class CodexAppServerClient {
     return result
   }
 
-  async runTurn({ threadId, prompt, cwd, onDelta, onCodexEvent }) {
+  async listSkills({ cwd, forceReload = false } = {}) {
+    await this.ensureStarted()
+    return this.request('skills/list', {
+      cwds: cwd ? [cwd] : [],
+      forceReload
+    })
+  }
+
+  async runTurn({ threadId, prompt, cwd, skills = [], onDelta, onCodexEvent }) {
     if (this.activeTurn || this.pendingTurnStart) {
       throw new Error('Codex is already running a turn')
     }
@@ -1082,9 +1047,15 @@ class CodexAppServerClient {
         onCodexEvent: typeof onCodexEvent === 'function' ? onCodexEvent : () => undefined
       }
     })
+    const input = []
+    for (const skill of skills) {
+      if (!skill?.name || !skill?.path) continue
+      input.push({ type: 'skill', name: String(skill.name), path: String(skill.path) })
+    }
+    input.push({ type: 'text', text: prompt, text_elements: [] })
     await this.request('turn/start', {
       threadId,
-      input: [{ type: 'text', text: prompt, text_elements: [] }],
+      input,
       cwd,
       approvalPolicy: 'never',
       sandboxPolicy: { type: 'dangerFullAccess' }
@@ -1148,207 +1119,84 @@ function createOplCodexGateway({
     return process.env.OPL_HERMES_DEFAULT_CWD || process.env.PWD || process.env.HOME || process.cwd()
   }
 
-  function purposeRouteCatalog() {
+  function normalizeCodexSkillEntries(response) {
+    const entries = []
+    for (const group of Array.isArray(response?.data) ? response.data : []) {
+      for (const skill of Array.isArray(group?.skills) ? group.skills : []) {
+        const name = canonicalSkillName(skill?.name)
+        if (!name || !skill?.path) continue
+        entries.push({
+          name,
+          description: String(skill.description || skill.shortDescription || ''),
+          enabled: skill.enabled !== false,
+          path: String(skill.path),
+          scope: skill.scope || null
+        })
+      }
+    }
+    return entries
+  }
+
+  function mergeCodexSkillCatalogEntries(codexSkills = []) {
+    const byName = new Map()
+    for (const skill of codexSkills) {
+      if (!byName.has(skill.name) || skill.enabled) {
+        byName.set(skill.name, skill)
+      }
+    }
+
     return {
-      surface_kind: 'opl_hermes_purpose_route_catalog.v1',
-      route_owner: 'one-person-lab',
+      surface_kind: 'opl_hermes_codex_skill_catalog.v1',
+      route_owner: 'codex',
       shell_role: 'implementation_adapter_only',
-      bridge_mode: 'executor_agent_route_bridge',
+      bridge_mode: 'codex_app_server_skill_first_adapter',
       authority_boundary: {
-        uses_opl_cli_app_action_or_skill_authority: true,
+        uses_codex_skill_plugin_authority: true,
+        gui_executes_domain_commands: false,
         creates_second_truth_source: false,
         can_write_domain_truth: false,
         can_create_owner_receipt: false,
         can_create_typed_blocker: false,
         can_claim_domain_ready: false
       },
-      routes: Object.values(PURPOSE_ROUTES).map(route => ({
-        purpose_id: route.purpose_id,
-        aliases: [...route.aliases],
-        agent_id: route.agent_id,
-        project_id: route.project_id,
-        target_domain_id: route.target_domain_id,
-        label: route.label,
-        owner_surface: route.owner_surface,
-        start_surface: route.start_surface,
-        app_action_id: route.app_action_id,
-        app_action_payload: route.app_action_payload,
-        ordinary_golden_path: route.ordinary_golden_path,
-        codex_prompt_contract: route.prompt_contract
+      skills: Object.values(OPL_CODEX_SKILLS).map(skill => ({
+        skill_id: skill.skill_id,
+        invocation: skill.invocation,
+        agent_id: skill.agent_id,
+        project_id: skill.project_id,
+        target_domain_id: skill.target_domain_id,
+        label: skill.label,
+        available: Boolean(byName.get(skill.skill_id)?.enabled),
+        codex_skill_name: byName.get(skill.skill_id)?.name || null,
+        codex_skill_path: byName.get(skill.skill_id)?.path || null,
+        codex_skill_scope: byName.get(skill.skill_id)?.scope || null,
+        codex_skill_description: byName.get(skill.skill_id)?.description || null,
+        ordinary_golden_path: skill.ordinary_golden_path,
+        codex_prompt_contract: skill.prompt_contract
       }))
     }
   }
 
-  function routeIdFromParams(params = {}) {
-    for (const key of ['purpose', 'purpose_id', 'route', 'agent_id', 'agent', 'project_id', 'domain_id']) {
-      const normalized = normalizePurposeToken(params[key])
-      if (PURPOSE_ROUTE_ALIASES.has(normalized)) return PURPOSE_ROUTE_ALIASES.get(normalized)
-    }
-
-    const text = normalizePurposeToken(`${params.title || ''} ${params.text || ''} ${params.prompt || ''}`)
-    if (!text) return null
-    for (const [alias, routeId] of PURPOSE_ROUTE_ALIASES) {
-      if (/[^a-z0-9-]/.test(alias) && text.includes(alias)) {
-        return routeId
-      }
-      if (
-        alias.length >= 2 &&
-        new RegExp(`(?:^|[^a-z0-9])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[^a-z0-9])`, 'i').test(text)
-      ) {
-        return routeId
-      }
-    }
-    return null
-  }
-
-  function resolvePurposeRoute(params = {}) {
-    const routeId = routeIdFromParams(params)
-    return routeId ? PURPOSE_ROUTES[routeId] : null
-  }
-
-  function publicPurposeRoute(route) {
-    if (!route) return null
-    return {
-      purpose_id: route.purpose_id,
-      agent_id: route.agent_id,
-      project_id: route.project_id,
-      target_domain_id: route.target_domain_id,
-      label: route.label,
-      owner_surface: route.owner_surface,
-      start_surface: route.start_surface,
-      app_action_id: route.app_action_id,
-      app_action_payload: route.app_action_payload,
-      ordinary_golden_path: route.ordinary_golden_path,
-      codex_prompt_contract: route.prompt_contract
-    }
-  }
-
-  async function runOplJson(args, { stage, timeoutMs = 30_000 } = {}) {
-    const result =
-      typeof runOplCommand === 'function'
-        ? await runOplCommand(args, { cwd: defaultCwd(), env: process.env, stage, timeoutMs })
-        : await runCommand('opl', args, {
-            cwd: defaultCwd(),
-            env: process.env,
-            stage: stage || args.join(' '),
-            emit: ev => {
-              if (ev.stream === 'stderr') log(ev.line)
-            },
-            timeoutMs
-          })
-    const parsed = result.stdout ? safeJsonParse(result.stdout) : null
-    return {
-      ok: result.code === 0,
-      code: result.code,
-      signal: result.signal || null,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      json: parsed
-    }
-  }
-
-  async function readPurposeRouteReceipt(route, params = {}) {
-    if (!route) return null
-    const receipt = {
-      surface_kind: 'opl_hermes_purpose_route_receipt.v1',
-      purpose_id: route.purpose_id,
-      agent_id: route.agent_id,
-      project_id: route.project_id,
-      target_domain_id: route.target_domain_id,
-      label: route.label,
-      owner_surface: route.owner_surface,
-      start_surface: route.start_surface,
-      app_action_id: route.app_action_id,
-      shell_role: 'implementation_adapter_only',
-      route_owner: 'one-person-lab',
-      codex_prompt_contract: route.prompt_contract,
-      authority_boundary: {
-        uses_opl_cli_app_action_or_skill_authority: true,
-        creates_second_truth_source: false,
-        can_write_domain_truth: false,
-        can_create_owner_receipt: false,
-        can_create_typed_blocker: false,
-        can_claim_domain_ready: false
-      },
-      app_action_dry_run: null,
-      start_readback: null,
-      errors: []
-    }
-
-    if (route.app_action_id) {
-      try {
-        const payload = {
-          ...(route.app_action_payload || {}),
-          ...(isPlainObject(params.route_payload) ? params.route_payload : {}),
-          ...(isPlainObject(params.payload) ? params.payload : {})
-        }
-        const result = await runOplJson(
-          [
-            'app',
-            'action',
-            'execute',
-            '--action',
-            route.app_action_id,
-            '--payload',
-            JSON.stringify(payload),
-            '--dry-run',
-            '--json'
-          ],
-          { stage: `opl-purpose-${route.purpose_id}-action-dry-run`, timeoutMs: 60_000 }
-        )
-        receipt.app_action_dry_run = {
-          ok: result.ok,
-          code: result.code,
-          action_id: route.app_action_id,
-          payload,
-          result: result.json
-        }
-        if (!result.ok) {
-          receipt.errors.push({
-            surface: 'opl app action execute --dry-run',
-            code: result.code,
-            message: result.stderr.trim() || result.stdout.trim() || `exit code ${result.code}`
-          })
-        }
-      } catch (error) {
-        receipt.errors.push({
-          surface: 'opl app action execute --dry-run',
-          message: error instanceof Error ? error.message : String(error)
-        })
-      }
-    }
-
-    const startArgs =
-      route.purpose_id === 'opl'
-        ? ['app', 'state', '--profile', 'fast', '--json']
-        : ['start', '--project', route.project_id, '--json']
+  async function codexSkillCatalog({ cwd = defaultCwd(), forceReload = false } = {}) {
     try {
-      const result = await runOplJson(startArgs, {
-        stage: `opl-purpose-${route.purpose_id}-start-readback`,
-        timeoutMs: 60_000
-      })
-      receipt.start_readback = {
-        ok: result.ok,
-        code: result.code,
-        command: `opl ${startArgs.join(' ')}`,
-        result: result.json
-      }
-      if (!result.ok) {
-        receipt.errors.push({
-          surface: `opl ${startArgs.join(' ')}`,
-          code: result.code,
-          message: result.stderr.trim() || result.stdout.trim() || `exit code ${result.code}`
-        })
-      }
+      const response = await getCodexClient(cwd).listSkills({ cwd, forceReload })
+      return mergeCodexSkillCatalogEntries(normalizeCodexSkillEntries(response))
     } catch (error) {
-      receipt.errors.push({
-        surface: `opl ${startArgs.join(' ')}`,
-        message: error instanceof Error ? error.message : String(error)
-      })
+      const catalog = mergeCodexSkillCatalogEntries([])
+      catalog.error = error instanceof Error ? error.message : String(error)
+      return catalog
     }
+  }
 
-    receipt.status = receipt.errors.length ? 'route_readback_with_blockers' : 'route_readback_ready'
-    return receipt
+  async function resolveRequestedCodexSkills(text, cwd = defaultCwd()) {
+    const requested = requestedCodexSkillIds(text)
+    if (!requested.length) return []
+    const catalog = await codexSkillCatalog({ cwd })
+    const byId = new Map(catalog.skills.map(skill => [skill.skill_id, skill]))
+    return requested
+      .map(skillId => byId.get(skillId))
+      .filter(skill => skill?.available && skill.codex_skill_name && skill.codex_skill_path)
+      .map(skill => ({ name: skill.codex_skill_name, path: skill.codex_skill_path }))
   }
 
   function getCodexClient(cwd = defaultCwd()) {
@@ -1805,7 +1653,6 @@ function createOplCodexGateway({
   function createSession(params = {}) {
     const id = `opl-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`
     const cwd = typeof params.cwd === 'string' && params.cwd.trim() ? path.resolve(params.cwd) : defaultCwd()
-    const purposeRoute = resolvePurposeRoute(params)
     const messages = Array.isArray(params.messages)
       ? params.messages
           .map(message => ({
@@ -1827,9 +1674,7 @@ function createOplCodexGateway({
       messages,
       usage: { calls: 0, input: 0, output: 0, total: 0 },
       threadId: null,
-      codexThread: null,
-      purposeRoute,
-      routeReceipt: null
+      codexThread: null
     }
     sessions.set(id, session)
     return session
@@ -1839,15 +1684,9 @@ function createOplCodexGateway({
     return [
       '你是 One Person Lab App 内由 Codex app-server 固定承载的后台代理。',
       '保持中文、直接、专业；按用户任务推进，不解释 UI 或实现细节。',
+      'MAS、MAG、RCA 等 One Person Lab 能力由 Codex 已安装的 Skill/Plugin/MCP 机制选择和调用；GUI adapter 不做关键词路由，也不预执行领域命令。',
       `Hermes session id: ${session.id}`,
-      `workspace: ${session.cwd || defaultCwd()}`,
-      session.purposeRoute
-        ? [
-            '',
-            'OPL purpose route contract:',
-            JSON.stringify(publicPurposeRoute(session.purposeRoute), null, 2)
-          ].join('\n')
-        : ''
+      `workspace: ${session.cwd || defaultCwd()}`
     ].join('\n')
   }
 
@@ -1866,13 +1705,6 @@ function createOplCodexGateway({
 
   function buildPrompt(text, session) {
     return [
-      session.purposeRoute
-        ? [
-            'OPL purpose route receipt:',
-            JSON.stringify(session.routeReceipt || publicPurposeRoute(session.purposeRoute), null, 2),
-            ''
-          ].join('\n')
-        : '',
       '用户输入：',
       text,
       '',
@@ -1950,8 +1782,8 @@ function createOplCodexGateway({
       surface,
       name,
       route_owner: 'official_hermes_backend',
-      bridge_mode: 'executor_agent_route_bridge',
-      message: 'OPL Codex/MAS adapter only owns executor/agent bridge routes; official Hermes backend owns this route.'
+      bridge_mode: 'codex_app_server_skill_first_adapter',
+      message: 'OPL Codex adapter only owns the thin Codex app-server bridge; official Hermes backend owns this route.'
     }
   }
 
@@ -2182,8 +2014,9 @@ function createOplCodexGateway({
       json(response, 200, { provider: configuredModel.provider, model: configuredModel.model, free_tier: null })
       return
     }
-    if (pathname === '/api/opl/purpose-routes') {
-      json(response, 200, purposeRouteCatalog())
+    if (pathname === '/api/opl/codex-skills') {
+      const url = new URL(request.url || '/', `http://${request.headers.host || '127.0.0.1'}`)
+      json(response, 200, await codexSkillCatalog({ cwd: defaultCwd(), forceReload: url.searchParams.get('force') === '1' }))
       return
     }
     if (pathname === '/api/smoke/connection') {
@@ -2257,9 +2090,6 @@ function createOplCodexGateway({
       }
       if (method === 'session.create') {
         const session = createSession(params)
-        if (session.purposeRoute) {
-          event(socket, 'route.selected', session.id, { route: publicPurposeRoute(session.purposeRoute) })
-        }
         bindCodexThread(session)
           .then(() => {
             send(socket, {
@@ -2298,11 +2128,6 @@ function createOplCodexGateway({
       if (method === 'prompt.submit') {
         const session = sessions.get(String(params.session_id))
         if (!session) throw new Error('session not found')
-        const promptRoute = resolvePurposeRoute({ ...params, prompt: params.text })
-        if (promptRoute) {
-          session.purposeRoute = promptRoute
-          event(socket, 'route.selected', session.id, { route: publicPurposeRoute(promptRoute) })
-        }
         submitPrompt(socket, session, String(params.text || ''))
           .then(() => send(socket, { jsonrpc: '2.0', id, result: { ok: true } }))
           .catch(error => send(socket, { jsonrpc: '2.0', id, error: { message: error instanceof Error ? error.message : String(error) } }))
@@ -2370,18 +2195,9 @@ function createOplCodexGateway({
           .catch(error => send(socket, { jsonrpc: '2.0', id, error: { message: error.message } }))
         return
       }
-      if (method === 'purpose.routes') {
-        send(socket, { jsonrpc: '2.0', id, result: purposeRouteCatalog() })
-        return
-      }
-      if (method === 'purpose.route.resolve') {
-        const route = resolvePurposeRoute(params)
-        if (!route) {
-          send(socket, { jsonrpc: '2.0', id, result: { ok: false, route: null } })
-          return
-        }
-        readPurposeRouteReceipt(route, params)
-          .then(receipt => send(socket, { jsonrpc: '2.0', id, result: { ok: true, route: publicPurposeRoute(route), receipt } }))
+      if (method === 'codex.skills') {
+        codexSkillCatalog({ cwd: defaultCwd(), forceReload: Boolean(params.forceReload) })
+          .then(result => send(socket, { jsonrpc: '2.0', id, result }))
           .catch(error => send(socket, { jsonrpc: '2.0', id, error: { message: error instanceof Error ? error.message : String(error) } }))
         return
       }
@@ -2439,23 +2255,14 @@ function createOplCodexGateway({
     session.usage.input += userText.length
     session.usage.total = session.usage.input + session.usage.output
     event(socket, 'session.info', session.id, runtimeInfo(session))
-    if (session.purposeRoute) {
-      event(socket, 'route.selected', session.id, { route: publicPurposeRoute(session.purposeRoute) })
-      session.routeReceipt = await readPurposeRouteReceipt(session.purposeRoute, {
-        text: userText,
-        session_id: session.id
-      })
-      event(socket, session.routeReceipt.errors.length ? 'route.error' : 'route.receipt', session.id, {
-        route: publicPurposeRoute(session.purposeRoute),
-        receipt: session.routeReceipt
-      })
-    }
     event(socket, 'message.start', session.id, { role: 'assistant' })
 
+    const codexSkills = await resolveRequestedCodexSkills(userText, session.cwd || defaultCwd())
     const result = await getCodexClient(session.cwd).runTurn({
       threadId,
       prompt: buildPrompt(userText, session),
       cwd: session.cwd || defaultCwd(),
+      skills: codexSkills,
       onDelta: chunk => {
         if (!chunk) return
         session.usage.output += chunk.length

@@ -488,14 +488,15 @@ export interface Translations {
       intro: string
       emptyTitle: string
       emptyDesc: string
-      owner: string
       project: string
-      action: string
-      readback: string
-      authority: string
-      aliases: string
-      routeReady: string
-      routeBoundary: string
+      invocation: string
+      codexSkill: string
+      skillPath: string
+      ordinaryPath: string
+      boundary: string
+      skillReady: string
+      skillMissing: string
+      skillBoundary: string
       noDomainTruth: string
     }
     sessions: {

@@ -255,25 +255,25 @@ export const zh: Translations = {
   },
 
   intro: {
-    body: '直接描述要推进的工作。需要科研、基金或演示任务时，可以先选择下面的内置智能体路线。',
-    routeAria: 'One Person Lab 内置智能体路线',
+    body: '直接描述要推进的工作。需要科研、基金或演示任务时，可以先选择下面的 Codex Skill 快捷入口。',
+    routeAria: 'One Person Lab Codex Skill 快捷入口',
     routes: {
       mas: {
         description: 'Med Auto Science',
         label: '科研',
-        prompt: '科研 / MAS：',
+        prompt: '$mas 请用 Med Auto Science 帮我推进科研任务：',
         shortLabel: 'MAS'
       },
       mag: {
         description: 'Med Auto Grant',
         label: '基金',
-        prompt: '基金 / MAG：',
+        prompt: '$mag 请用 Med Auto Grant 帮我推进基金任务：',
         shortLabel: 'MAG'
       },
       rca: {
         description: 'RedCube AI',
         label: '演示',
-        prompt: '演示 / RCA：',
+        prompt: '$rca 请用 RedCube AI 帮我推进演示任务：',
         shortLabel: 'RCA'
       }
     }
@@ -809,18 +809,19 @@ export const zh: Translations = {
       failedLoad: '智能体与能力加载失败',
       title: '智能体与能力',
       intro:
-        '这些入口把普通对话路由到 One Person Lab 的 owner surface。GUI 只做路由与回执展示，不写入 MAS/MAG/RCA 的领域真相、成果正文或质量结论。',
-      emptyTitle: '暂无可用智能体路由',
-      emptyDesc: '当前候选版本没有从 OPL gateway 读到 purpose route catalog。',
-      owner: 'Owner surface',
+        '这些能力由 Codex 的 Skill/Plugin 机制加载和调用。GUI 只提供入口展示与 prompt shortcut，不解析关键词、不预执行 MAS/MAG/RCA 命令，也不创建领域回执。',
+      emptyTitle: '暂无可用 Codex Skill',
+      emptyDesc: '当前候选版本没有从 OPL gateway 读到 Codex Skill catalog。',
       project: '项目',
-      action: '准备动作',
-      readback: '读回',
-      authority: '权限边界',
-      aliases: '触发词',
-      routeReady: '可路由',
-      routeBoundary: 'GUI 只负责路由，不接管领域权威',
-      noDomainTruth: '不写领域真相 / 不创建 owner receipt / 不声明 domain ready'
+      invocation: '显式调用',
+      codexSkill: 'Codex Skill',
+      skillPath: 'Skill 路径',
+      ordinaryPath: '常规路径',
+      boundary: '权限边界',
+      skillReady: 'Codex 已发现',
+      skillMissing: 'Codex 未发现',
+      skillBoundary: '由 Codex 选择和调用，GUI 不接管领域权威',
+      noDomainTruth: 'GUI 不写领域真相 / 不创建 owner receipt / 不声明 domain ready'
     },
     sessions: {
       loading: '正在加载已归档会话…',

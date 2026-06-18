@@ -24,7 +24,6 @@ import {
   stripGeneratedImageEchoes
 } from '@/lib/generated-images'
 import { triggerHaptic } from '@/lib/haptics'
-import { routeEventToToolPayload } from '@/lib/opl-route-events'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
 import { parseTodos } from '@/lib/todos'
 import { setClarifyRequest } from '@/store/clarify'
@@ -860,15 +859,6 @@ export function useMessageStream({
       } else if (event.type === 'message.delta') {
         if (sessionId) {
           appendAssistantDelta(sessionId, coerceGatewayText(payload?.text))
-        }
-      } else if (event.type === 'route.selected' || event.type === 'route.receipt' || event.type === 'route.error') {
-        if (sessionId) {
-          flushQueuedDeltas(sessionId)
-          const routePayload = routeEventToToolPayload(event.type, payload)
-
-          if (routePayload) {
-            upsertToolCall(sessionId, routePayload, event.type === 'route.selected' ? 'running' : 'complete', event.type)
-          }
         }
       } else if (event.type === 'thinking.delta') {
         // thinking.delta carries the kawaii spinner status (face + verb from

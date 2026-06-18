@@ -108,9 +108,83 @@ function appStatePayload(apiKeyPresent, codexInstalled = true) {
   }
 }
 
+function codexAppServerFixtureSource(codexCallsPath) {
+  return `#!/usr/bin/env node
+const fs = require('node:fs')
+const args = process.argv.slice(2)
+if (args.join(' ') !== 'app-server --listen stdio://') {
+  console.error('unexpected codex command: ' + args.join(' '))
+  process.exit(42)
+}
+const callsPath = ${JSON.stringify(codexCallsPath)}
+let buffer = ''
+function log(entry) {
+  fs.appendFileSync(callsPath, JSON.stringify(entry) + '\\n')
+}
+function write(message) {
+  process.stdout.write(JSON.stringify(message) + '\\n')
+}
+function respond(id, result) {
+  write({ jsonrpc: '2.0', id, result })
+}
+function skill(name, description) {
+  return { name, description, path: '/fixture/codex/skills/' + name + '/SKILL.md', scope: 'USER', enabled: true }
+}
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', chunk => {
+  buffer += chunk
+  let newlineIndex = buffer.indexOf('\\n')
+  while (newlineIndex >= 0) {
+    const line = buffer.slice(0, newlineIndex).trim()
+    buffer = buffer.slice(newlineIndex + 1)
+    if (line) handle(JSON.parse(line))
+    newlineIndex = buffer.indexOf('\\n')
+  }
+})
+function handle(request) {
+  log({ method: request.method, params: request.params || {} })
+  if (request.method === 'initialize') {
+    respond(request.id, { serverInfo: { name: 'fixture-codex-app-server', version: '0.0.0' } })
+    return
+  }
+  if (request.method === 'skills/list') {
+    respond(request.id, {
+      data: [{
+        cwd: request.params?.cwds?.[0] || process.cwd(),
+        errors: [],
+        skills: [
+          skill('mas', 'Use when Codex should operate MedAutoScience through its stable runtime.'),
+          skill('mag', 'Use when Codex should operate Med Auto Grant through its grant-authoring runtime.'),
+          skill('rca', 'Operate RedCube AI as the formal visual-deliverable domain app.')
+        ]
+      }]
+    })
+    return
+  }
+  if (request.method === 'thread/start') {
+    respond(request.id, { thread: { id: 'thread-fixture' }, cwd: request.params?.cwd || process.cwd() })
+    return
+  }
+  if (request.method === 'turn/start') {
+    respond(request.id, { turn: { id: 'turn-fixture', status: 'running' } })
+    write({ jsonrpc: '2.0', method: 'turn/started', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'running' } } })
+    write({ jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { threadId: request.params?.threadId || 'thread-fixture', turnId: 'turn-fixture', delta: 'fixture codex response' } })
+    write({ jsonrpc: '2.0', method: 'turn/completed', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'completed' } } })
+    return
+  }
+  if (request.method === 'turn/abort') {
+    respond(request.id, { ok: true })
+    return
+  }
+  write({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'unsupported fixture method ' + request.method } })
+}
+`
+}
+
 function makeFixtureBin(sandbox, apiKeyPresent, codexInstalled = true) {
   const binDir = path.join(sandbox, 'bin')
   const callsPath = path.join(sandbox, 'opl-calls.log')
+  const codexCallsPath = path.join(sandbox, 'codex-calls.log')
   fs.mkdirSync(binDir, { recursive: true })
   fs.mkdirSync(path.dirname(callsPath), { recursive: true })
   const payload = JSON.stringify(initializePayload(apiKeyPresent))
@@ -141,38 +215,6 @@ if (args.join(' ') === 'system reconcile-modules --json') {
   console.log(JSON.stringify({ ok: true, reconciled: true }))
   process.exit(0)
 }
-if (args.join(' ').startsWith('app action execute --action workspace_ensure ')) {
-  console.log(JSON.stringify({
-    ok: true,
-    app_action_execution: {
-      action_id: 'workspace_ensure',
-      dry_run: true,
-      authority_boundary: {
-        shell: 'implementation_adapter_only',
-        can_write_domain_truth: false
-      }
-    }
-  }))
-  process.exit(0)
-}
-if (args.join(' ') === 'start --project medautoscience --json') {
-  console.log(JSON.stringify({
-    ok: true,
-    product_entry_start: {
-      project_id: 'medautoscience',
-      selected_mode_id: 'open_product_entry'
-    }
-  }))
-  process.exit(0)
-}
-if (args.join(' ') === 'start --project medautogrant --json') {
-  console.error(JSON.stringify({ error: { code: 'route_not_ready', message: 'MAG workspace route is not ready in this smoke fixture.' } }))
-  process.exit(2)
-}
-if (args.join(' ') === 'start --project redcube --json') {
-  console.error(JSON.stringify({ error: { code: 'route_not_ready', message: 'RCA workspace route is not ready in this smoke fixture.' } }))
-  process.exit(2)
-}
 if (args.join(' ') === 'system configure-codex --api-key-stdin --json') {
   process.stdin.resume()
   process.stdin.on('end', () => {
@@ -183,54 +225,8 @@ if (args.join(' ') === 'system configure-codex --api-key-stdin --json') {
 console.error('unexpected opl command: ' + args.join(' '))
 process.exit(42)
 `)
-  writeExecutable(path.join(binDir, 'codex'), `#!/usr/bin/env node
-const args = process.argv.slice(2)
-if (args.join(' ') !== 'app-server --listen stdio://') {
-  console.error('unexpected codex command: ' + args.join(' '))
-  process.exit(42)
-}
-let buffer = ''
-function write(message) {
-  process.stdout.write(JSON.stringify(message) + '\\n')
-}
-function respond(id, result) {
-  write({ jsonrpc: '2.0', id, result })
-}
-process.stdin.setEncoding('utf8')
-process.stdin.on('data', chunk => {
-  buffer += chunk
-  let newlineIndex = buffer.indexOf('\\n')
-  while (newlineIndex >= 0) {
-    const line = buffer.slice(0, newlineIndex).trim()
-    buffer = buffer.slice(newlineIndex + 1)
-    if (line) handle(JSON.parse(line))
-    newlineIndex = buffer.indexOf('\\n')
-  }
-})
-function handle(request) {
-  if (request.method === 'initialize') {
-    respond(request.id, { serverInfo: { name: 'fixture-codex-app-server', version: '0.0.0' } })
-    return
-  }
-  if (request.method === 'thread/start') {
-    respond(request.id, { thread: { id: 'thread-fixture' }, cwd: request.params?.cwd || process.cwd() })
-    return
-  }
-  if (request.method === 'turn/start') {
-    respond(request.id, { turn: { id: 'turn-fixture', status: 'running' } })
-    write({ jsonrpc: '2.0', method: 'turn/started', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'running' } } })
-    write({ jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { threadId: request.params?.threadId || 'thread-fixture', turnId: 'turn-fixture', delta: 'fixture codex response' } })
-    write({ jsonrpc: '2.0', method: 'turn/completed', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'completed' } } })
-    return
-  }
-  if (request.method === 'turn/abort') {
-    respond(request.id, { ok: true })
-    return
-  }
-  write({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'unsupported fixture method ' + request.method } })
-}
-`)
-  return { binDir, callsPath }
+  writeExecutable(path.join(binDir, 'codex'), codexAppServerFixtureSource(codexCallsPath))
+  return { binDir, callsPath, codexCallsPath }
 }
 
 async function waitForLog(logPath, predicate) {
@@ -331,7 +327,7 @@ async function runLaunch({
   apiKeyPresent,
   codexInstalled = true,
   exerciseChat = false,
-  exerciseRoutes = false,
+  exerciseSkillPrompt = false,
   name,
   sandbox,
   expectBlockingInitialize,
@@ -343,9 +339,10 @@ async function runLaunch({
   fs.mkdirSync(userData, { recursive: true })
   fs.mkdirSync(hermesHome, { recursive: true })
   fs.mkdirSync(workspace, { recursive: true })
-  const { binDir, callsPath } = makeFixtureBin(path.join(sandbox, `fixture-${name}`), apiKeyPresent, codexInstalled)
+  const { binDir, callsPath, codexCallsPath } = makeFixtureBin(path.join(sandbox, `fixture-${name}`), apiKeyPresent, codexInstalled)
   const logPath = path.join(hermesHome, 'logs', 'desktop.log')
   const callsBefore = readCalls(callsPath).length
+  const codexCallsBefore = readCalls(codexCallsPath).length
 
   const env = {
     ...process.env,
@@ -383,17 +380,19 @@ async function runLaunch({
     const status = await getJson(baseUrl, '/api/status')
     assert(status.backend === 'codex-app-server-adapter', `${name}: status backend is not Codex app-server adapter`)
     assert(status.provider_configured === apiKeyPresent, `${name}: provider_configured mismatch`)
-    const purposeCatalog = await getJson(baseUrl, '/api/opl/purpose-routes')
-    assert(purposeCatalog.surface_kind === 'opl_hermes_purpose_route_catalog.v1', `${name}: purpose route catalog shape mismatch`)
-    for (const purposeId of ['mas', 'mag', 'rca', 'opl']) {
-      assert(purposeCatalog.routes.some(route => route.purpose_id === purposeId), `${name}: missing ${purposeId} route`)
+    const skillCatalog = await getJson(baseUrl, '/api/opl/codex-skills')
+    assert(skillCatalog.surface_kind === 'opl_hermes_codex_skill_catalog.v1', `${name}: Codex Skill catalog shape mismatch`)
+    assert(skillCatalog.authority_boundary.gui_executes_domain_commands === false, `${name}: GUI must not execute domain commands`)
+    for (const skillId of ['mas', 'mag', 'rca', 'opl']) {
+      assert(skillCatalog.skills.some(skill => skill.skill_id === skillId), `${name}: missing ${skillId} skill`)
     }
+    const availableCodexSkills = skillCatalog.skills.filter(skill => skill.available).map(skill => skill.skill_id)
     const smokeConnection = await getJson(baseUrl, '/api/smoke/connection')
     assert(smokeConnection.surface_kind === 'opl_hermes_smoke_connection.v1', `${name}: smoke connection descriptor missing`)
-    const chatEvidence = exerciseChat || exerciseRoutes
+    const chatEvidence = exerciseChat || exerciseSkillPrompt
       ? await exerciseGatewayConversation({
           wsUrl: smokeConnection.wsUrl,
-          exerciseRoutes,
+          exerciseSkillPrompt,
           name
         })
       : null
@@ -494,16 +493,38 @@ async function runLaunch({
     }
     const copiedLogPath = copyIfExists(logPath, path.join(artifactsDir, `${name}.desktop.log`))
     const copiedCallsPath = copyIfExists(callsPath, path.join(artifactsDir, `${name}.opl-calls.log`))
+    const copiedCodexCallsPath = copyIfExists(codexCallsPath, path.join(artifactsDir, `${name}.codex-calls.log`))
+    const newCodexCalls = readCalls(codexCallsPath).slice(codexCallsBefore).map(line => {
+      try {
+        return JSON.parse(line)
+      } catch {
+        return { raw: line }
+      }
+    })
+    if (chatEvidence?.skill_prompt_forwarded) {
+      const turnStart = newCodexCalls.find(call => call.method === 'turn/start')
+      assert(
+        turnStart?.params?.input?.some(input => input.type === 'skill' && input.name === 'mas'),
+        `${name}: $mas prompt did not reach Codex as a structured skill input`
+      )
+      chatEvidence.skill_input_forwarded = true
+    }
     return {
       calls: newCalls,
+      codexCalls: newCodexCalls,
       logPath,
       copiedLogPath,
       callsPath,
       copiedCallsPath,
+      codexCallsPath,
+      copiedCodexCallsPath,
       sandbox,
       gateway: {
         status,
-        purpose_route_count: purposeCatalog.routes.length
+        codex_skill_count: skillCatalog.skills.length,
+        codex_skill_available_count: availableCodexSkills.length,
+        codex_skills_available: availableCodexSkills,
+        codex_skills_missing: skillCatalog.skills.filter(skill => !skill.available).map(skill => skill.skill_id)
       },
       chatEvidence
     }
@@ -528,7 +549,7 @@ async function runLaunch({
   }
 }
 
-async function exerciseGatewayConversation({ wsUrl, exerciseRoutes, name }) {
+async function exerciseGatewayConversation({ wsUrl, exerciseSkillPrompt, name }) {
   const socket = await openGatewaySocket(wsUrl)
   const frames = []
   socket.addEventListener('message', event => {
@@ -536,11 +557,11 @@ async function exerciseGatewayConversation({ wsUrl, exerciseRoutes, name }) {
   })
 
   try {
-    const session = await requestRpcOnSocket(socket, 'session.create', exerciseRoutes ? { purpose: 'mas' } : {})
+    const session = await requestRpcOnSocket(socket, 'session.create')
     await requestRpcOnSocket(socket, 'prompt.submit', {
       session_id: session.session_id,
-      text: exerciseRoutes
-        ? '检查 MAS 糖尿病 002、003 两篇论文的进展'
+      text: exerciseSkillPrompt
+        ? '$mas 检查糖尿病 002、003 两篇论文的进展'
         : '请回复一句 packaged Codex smoke。'
     })
     await waitForGatewayFrame(frames, frame => frame.params?.type === 'message.complete', `${name} message.complete`)
@@ -551,38 +572,17 @@ async function exerciseGatewayConversation({ wsUrl, exerciseRoutes, name }) {
       .join('')
     assert(assistantDelta.includes('fixture codex response'), `${name}: Codex app-server delta did not reach Hermes stream`)
 
-    const routeFrame = frames.find(frame => frame.params?.type === 'route.receipt' || frame.params?.type === 'route.error')
-    if (exerciseRoutes) {
-      assert(routeFrame, `${name}: route receipt/error did not reach Hermes stream`)
-      assert(routeFrame.params.payload.receipt.purpose_id === 'mas', `${name}: MAS route receipt missing`)
-      assert(routeFrame.params.payload.receipt.status === 'route_readback_ready', `${name}: MAS route was not ready in fixture`)
-    }
-
-    const routeReadbacks = {}
-    if (exerciseRoutes) {
-      for (const purpose of ['mag', 'rca']) {
-        const resolved = await requestRpcOnSocket(socket, 'purpose.route.resolve', { purpose })
-        assert(resolved.ok === true, `${name}: ${purpose} route did not resolve`)
-        assert(resolved.route.purpose_id === purpose, `${name}: ${purpose} route id mismatch`)
-        assert(
-          resolved.receipt.status === 'route_readback_ready' || resolved.receipt.status === 'route_readback_with_blockers',
-          `${name}: ${purpose} route status was not explicit`
-        )
-        routeReadbacks[purpose] = {
-          event_status: resolved.receipt.status,
-          error_count: resolved.receipt.errors.length,
-          project_id: resolved.receipt.project_id
-        }
-      }
-    }
+    const routeFrame = frames.find(frame =>
+      frame.params?.type === 'route.selected' || frame.params?.type === 'route.receipt' || frame.params?.type === 'route.error'
+    )
+    assert(!routeFrame, `${name}: GUI-side route event leaked into Codex Skill flow`)
 
     return {
       session_id: session.session_id,
       message_complete: true,
       assistant_delta: assistantDelta,
-      route_event_type: routeFrame?.params?.type || null,
-      route_status: routeFrame?.params?.payload?.receipt?.status || null,
-      route_readbacks: routeReadbacks,
+      skill_prompt_forwarded: Boolean(exerciseSkillPrompt),
+      route_event_type: null,
       frame_count: frames.length
     }
   } finally {
@@ -617,7 +617,7 @@ async function main() {
   const configured = await runLaunch({
     apiKeyPresent: true,
     exerciseChat: true,
-    exerciseRoutes: true,
+    exerciseSkillPrompt: true,
     expectBlockingInitialize: false,
     expectRouteToModelAccess: false,
     name: 'configured-key-first-run',

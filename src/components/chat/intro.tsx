@@ -84,7 +84,7 @@ export function Intro({ personality, seed }: IntroProps) {
                   'hover:-translate-y-px hover:border-primary/45 hover:bg-[color-mix(in_srgb,var(--dt-primary)_8%,var(--composer-fill))] hover:text-foreground',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
                 )}
-                data-purpose-route={route.id}
+                data-codex-skill={route.id}
                 key={route.id}
                 onClick={() => selectRoute(route)}
                 title={routeChipTitle(routeCopy)}

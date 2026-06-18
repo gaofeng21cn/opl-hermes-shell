@@ -28,7 +28,7 @@ import type {
   OAuthProvidersResponse,
   OAuthStartResponse,
   OAuthSubmitResponse,
-  OplPurposeRouteCatalog,
+  OplCodexSkillCatalog,
   PaginatedSessions,
   ProfileCreatePayload,
   ProfileSetupCommand,
@@ -83,8 +83,8 @@ export type {
   ModelInfoResponse,
   ModelOptionProvider,
   ModelOptionsResponse,
-  OplPurposeRoute,
-  OplPurposeRouteCatalog,
+  OplCodexSkill,
+  OplCodexSkillCatalog,
   PaginatedSessions,
   ProfileCreatePayload,
   ProfileInfo,
@@ -333,10 +333,10 @@ export function getHermesConfigSchema(): Promise<ConfigSchemaResponse> {
   })
 }
 
-export function getOplPurposeRoutes(): Promise<OplPurposeRouteCatalog> {
-  return window.hermesDesktop.api<OplPurposeRouteCatalog>({
+export function getOplCodexSkills(): Promise<OplCodexSkillCatalog> {
+  return window.hermesDesktop.api<OplCodexSkillCatalog>({
     ...profileScoped(),
-    path: '/api/opl/purpose-routes'
+    path: '/api/opl/codex-skills'
   })
 }
 

@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
 
-const getOplPurposeRoutes = vi.fn()
+const getOplCodexSkills = vi.fn()
 
 vi.mock('@/hermes', () => ({
-  getOplPurposeRoutes: () => getOplPurposeRoutes()
+  getOplCodexSkills: () => getOplCodexSkills()
 }))
 
 vi.mock('@/store/notifications', () => ({
@@ -19,48 +19,51 @@ afterEach(() => {
 })
 
 describe('AgentsCapabilitiesSettings', () => {
-  it('renders OPL purpose routes as read-only capability entries', async () => {
-    getOplPurposeRoutes.mockResolvedValue({
-      surface_kind: 'opl_hermes_purpose_route_catalog.v1',
-      route_owner: 'one-person-lab',
+  it('renders OPL Codex skills as read-only capability entries', async () => {
+    getOplCodexSkills.mockResolvedValue({
+      surface_kind: 'opl_hermes_codex_skill_catalog.v1',
+      route_owner: 'codex',
       shell_role: 'implementation_adapter_only',
-      bridge_mode: 'executor_agent_route_bridge',
+      bridge_mode: 'codex_app_server_skill_first_adapter',
       authority_boundary: {
-        uses_opl_cli_app_action_or_skill_authority: true,
+        uses_codex_skill_plugin_authority: true,
+        gui_executes_domain_commands: false,
         creates_second_truth_source: false,
         can_write_domain_truth: false,
         can_create_owner_receipt: false,
         can_create_typed_blocker: false,
         can_claim_domain_ready: false
       },
-      routes: [
+      skills: [
         {
-          purpose_id: 'mas',
-          aliases: ['mas', '科研', '论文', '糖尿病'],
+          skill_id: 'mas',
+          invocation: '$mas',
           agent_id: 'mas',
           project_id: 'medautoscience',
           target_domain_id: 'med-autoscience',
           label: 'Med Auto Science',
-          owner_surface: 'opl foundry agents list --json',
-          start_surface: 'opl start --project medautoscience --json',
-          app_action_id: 'workspace_ensure',
-          app_action_payload: { agent_id: 'mas' },
+          available: true,
+          codex_skill_name: 'mas',
+          codex_skill_path: '/Users/gaofeng/.codex/plugins/cache/mas-local/mas/0.1.0a4/skills/mas/SKILL.md',
+          codex_skill_scope: 'USER',
+          codex_skill_description: 'Use when Codex should operate MedAutoScience.',
           ordinary_golden_path: 'study -> owner receipt',
-          codex_prompt_contract: 'Do not write MAS truth.'
+          codex_prompt_contract: 'Codex chooses and operates MAS.'
         },
         {
-          purpose_id: 'mag',
-          aliases: ['mag', '基金'],
+          skill_id: 'mag',
+          invocation: '$mag',
           agent_id: 'mag',
           project_id: 'medautogrant',
           target_domain_id: 'med-auto-grant',
           label: 'Med Auto Grant',
-          owner_surface: 'opl foundry agents list --json',
-          start_surface: 'opl start --project medautogrant --json',
-          app_action_id: 'workspace_ensure',
-          app_action_payload: { agent_id: 'mag' },
+          available: true,
+          codex_skill_name: 'mag',
+          codex_skill_path: '/Users/gaofeng/.codex/plugins/cache/mag-local/mag/0.1.0/skills/mag/SKILL.md',
+          codex_skill_scope: 'USER',
+          codex_skill_description: 'Use when Codex should operate Med Auto Grant.',
           ordinary_golden_path: 'grant -> owner receipt',
-          codex_prompt_contract: 'Do not write MAG truth.'
+          codex_prompt_contract: 'Codex chooses and operates MAG.'
         }
       ]
     })
@@ -75,8 +78,12 @@ describe('AgentsCapabilitiesSettings', () => {
 
     expect(await screen.findByText('Med Auto Science')).toBeTruthy()
     expect(screen.getByText('Med Auto Grant')).toBeTruthy()
-    expect(screen.getAllByText('可路由').length).toBe(2)
-    expect(screen.getAllByText(/不写领域真相/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Codex 已发现').length).toBe(2)
+    expect(screen.getByText('$mas')).toBeTruthy()
+    expect(screen.getByText('$mag')).toBeTruthy()
+    expect(screen.getByText('mas')).toBeTruthy()
+    expect(screen.getByText('mag')).toBeTruthy()
+    expect(screen.getAllByText(/GUI 不写领域真相/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/medautoscience/).length).toBeGreaterThan(0)
   })
 })

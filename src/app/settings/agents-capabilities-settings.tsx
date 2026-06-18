@@ -1,24 +1,24 @@
 import { useEffect, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
-import { getOplPurposeRoutes } from '@/hermes'
+import { getOplCodexSkills } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { Brain, CheckCircle2 } from '@/lib/icons'
 import { notifyError } from '@/store/notifications'
-import type { OplPurposeRouteCatalog } from '@/types/hermes'
+import type { OplCodexSkillCatalog } from '@/types/hermes'
 
 import { EmptyState, ListRow, LoadingState, SectionHeading, SettingsContent } from './primitives'
 
 export function AgentsCapabilitiesSettings() {
   const { t } = useI18n()
   const copy = t.settings.agentsCapabilities
-  const [catalog, setCatalog] = useState<OplPurposeRouteCatalog | null>(null)
+  const [catalog, setCatalog] = useState<OplCodexSkillCatalog | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
 
-    getOplPurposeRoutes()
+    getOplCodexSkills()
       .then(nextCatalog => {
         if (!cancelled) {
           setCatalog(nextCatalog)
@@ -42,7 +42,7 @@ export function AgentsCapabilitiesSettings() {
     return <LoadingState label={copy.loading} />
   }
 
-  const routes = catalog?.routes ?? []
+  const skills = catalog?.skills ?? []
 
   return (
     <SettingsContent>
@@ -51,45 +51,45 @@ export function AgentsCapabilitiesSettings() {
         {copy.intro}
       </p>
 
-      {routes.length === 0 ? (
+      {skills.length === 0 ? (
         <EmptyState description={copy.emptyDesc} title={copy.emptyTitle} />
       ) : (
         <div className="divide-y divide-border/45">
-          {routes.map(route => (
+          {skills.map(skill => (
             <ListRow
               action={
                 <Badge className="gap-1" variant="default">
                   <CheckCircle2 className="size-3" />
-                  {copy.routeReady}
+                  {skill.available ? copy.skillReady : copy.skillMissing}
                 </Badge>
               }
               below={
                 <div className="mt-3 grid gap-1.5 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
                   <div>
-                    <span className="font-medium text-foreground/80">{copy.owner}: </span>
-                    <code>{route.owner_surface}</code>
+                    <span className="font-medium text-foreground/80">{copy.invocation}: </span>
+                    <code>{skill.invocation}</code>
                   </div>
                   <div>
-                    <span className="font-medium text-foreground/80">{copy.action}: </span>
-                    <code>{route.app_action_id || '-'}</code>
+                    <span className="font-medium text-foreground/80">{copy.codexSkill}: </span>
+                    <code>{skill.codex_skill_name || '-'}</code>
                   </div>
                   <div>
-                    <span className="font-medium text-foreground/80">{copy.readback}: </span>
-                    <code>{route.start_surface}</code>
+                    <span className="font-medium text-foreground/80">{copy.skillPath}: </span>
+                    <code>{skill.codex_skill_path || '-'}</code>
                   </div>
                   <div>
-                    <span className="font-medium text-foreground/80">{copy.aliases}: </span>
-                    {route.aliases.slice(0, 8).join(' / ')}
+                    <span className="font-medium text-foreground/80">{copy.ordinaryPath}: </span>
+                    {skill.ordinary_golden_path}
                   </div>
                   <div>
-                    <span className="font-medium text-foreground/80">{copy.authority}: </span>
+                    <span className="font-medium text-foreground/80">{copy.boundary}: </span>
                     {copy.noDomainTruth}
                   </div>
                 </div>
               }
-              description={`${copy.project}: ${route.project_id} · ${copy.routeBoundary}`}
-              key={route.purpose_id}
-              title={route.label}
+              description={`${copy.project}: ${skill.project_id} · ${copy.skillBoundary}`}
+              key={skill.skill_id}
+              title={skill.label}
               wide
             />
           ))}
