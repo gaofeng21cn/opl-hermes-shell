@@ -488,12 +488,18 @@ export interface Translations {
       intro: string
       emptyTitle: string
       emptyDesc: string
+      chatInvocation: string
+      execution: string
+      executionDesc: string
+      invocationFlow: string
       project: string
       invocation: string
       codexSkill: string
       skillPath: string
       ordinaryPath: string
       boundary: string
+      slashAvailable: string
+      missingHint: string
       skillReady: string
       skillMissing: string
       skillBoundary: string

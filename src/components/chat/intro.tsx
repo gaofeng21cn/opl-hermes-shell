@@ -46,7 +46,7 @@ export function Intro({ personality, seed }: IntroProps) {
   const copy = t.intro
 
   const selectRoute = (route: OplRouteChip) => {
-    requestComposerInsert(copy.routes[route.id].prompt, { mode: 'inline', target: 'main' })
+    requestComposerInsert(`$${route.id} `, { mode: 'inline', target: 'main' })
   }
 
   return (

@@ -130,6 +130,12 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   technical verification。
 - **最小验证**：证明 upstream 基线仍在、OPL branding/adapter/package wrapper 存在，
   且旧稳定线迁移文件没有被误带入。
+- **测试分层**：默认本机验证必须是 non-foreground。`smoke:opl-first-run` 负责
+  packaged app 的启动、first-run、fixture Codex turn、Skill input 和长回复 ack
+  证据，并通过 `OPL_HERMES_SMOKE_NO_FOREGROUND=1` 避免抢占用户桌面。Settings visual
+  smoke 会打开并聚焦 `.app` 以截取截图，必须显式传 `--allow-foreground`，并优先在
+  VM/Tart 中运行；它不能进入默认 App-root candidate command chain，也不能作为
+  `validate:candidate -- --require-app` 的隐含要求。
 
 这些改动可以作为长期 OPL delta 存在，但应保持薄、可比较、可撤回。凡是让官方
 Hermes 设置页、skills、toolsets、MCP、profiles 或 cron 变空的改动，都默认不是

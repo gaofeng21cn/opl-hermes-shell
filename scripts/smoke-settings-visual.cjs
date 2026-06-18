@@ -18,6 +18,7 @@ const smokeTimeoutMs = options.timeoutMs
 function parseArgs(argv) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   const parsed = {
+    allowForeground: false,
     appPath: defaultAppPath,
     artifactsDir: path.join(root, 'out', `smoke-settings-visual-${stamp}`),
     remoteDebuggingPort: 9339,
@@ -31,6 +32,8 @@ function parseArgs(argv) {
   node scripts/smoke-settings-visual.cjs [options]
 
 Options:
+  --allow-foreground      Required. This smoke opens and focuses the packaged app
+                           to capture screenshots; prefer VM/Tart.
   --app <path>             Packaged Hermes .app. Default: ${defaultAppPath}
   --out <path>             Artifact directory. Default: out/smoke-settings-visual-<timestamp>
   --remote-debugging-port <n>
@@ -39,6 +42,10 @@ Options:
   --help                   Show this message.
 `)
       process.exit(0)
+    }
+    if (arg === '--allow-foreground') {
+      parsed.allowForeground = true
+      continue
     }
     const value = argv[index + 1]
     if (!value || value.startsWith('--')) {
@@ -414,6 +421,10 @@ function assertTextExcludes(text, forbidden, label) {
 
 async function main() {
   assert(process.platform === 'darwin', 'packaged Settings visual smoke is macOS-only')
+  assert(
+    options.allowForeground === true,
+    'packaged Settings visual smoke opens/focuses the app to capture screenshots. Run it in VM/Tart, or pass --allow-foreground explicitly on an idle machine.'
+  )
   assert(fs.existsSync(binary), `missing packaged executable: ${binary}`)
   assert(!fs.existsSync(legacyBinary), `packaged app still exposes legacy Electron executable: ${legacyBinary}`)
 

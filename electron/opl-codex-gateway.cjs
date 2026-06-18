@@ -560,6 +560,8 @@ const BRIDGE_RPC_METHODS = [
   'setup.runtime_check',
   'codex.skills',
   'model.options',
+  'commands.catalog',
+  'complete.slash',
   'file.attach',
   'image.attach',
   'image.attach_bytes'
@@ -602,6 +604,60 @@ function requestedCodexSkillIds(text) {
     seen.add(skillId)
   }
   return requested
+}
+
+function stripLegacyPurposeRouteReceipt(text) {
+  const stripped = String(text || '')
+    .replace(/OPL purpose route receipt:\s*\{[\s\S]*?(?=\n\n用户输入：|\n\nsession:|\n用户输入：|$)/g, '')
+    .replace(/^\s*Opl route\s*$/gim, '')
+    .trim()
+
+  const legacyWrapped = stripped.match(/用户输入：\s*([\s\S]*?)(?:\n\nsession:\s*\S+\s*\ncwd:\s*.*)?$/)
+  const userText = legacyWrapped?.[1]?.trim()
+
+  return userText || stripped
+}
+
+function codexSkillSlashCommand(skill) {
+  return `/${skill.skill_id}`
+}
+
+function codexSkillSlashDescription(skill) {
+  return `通过 Codex Skill 调用 ${skill.label}（${skill.invocation}）`
+}
+
+function codexSkillSlashCatalog() {
+  const pairs = Object.values(OPL_CODEX_SKILLS)
+    .filter(skill => skill.skill_id !== 'opl')
+    .map(skill => [codexSkillSlashCommand(skill), codexSkillSlashDescription(skill)])
+
+  return {
+    categories: [
+      {
+        name: 'Skills',
+        pairs
+      }
+    ],
+    pairs,
+    skill_count: pairs.length
+  }
+}
+
+function codexSkillSlashCompletions(text) {
+  const query = String(text || '').replace(/^\/+/, '').trim().toLowerCase()
+  const items = Object.values(OPL_CODEX_SKILLS)
+    .filter(skill => skill.skill_id !== 'opl')
+    .map(skill => ({
+      text: codexSkillSlashCommand(skill),
+      display: `${codexSkillSlashCommand(skill)} · ${skill.label}`,
+      meta: codexSkillSlashDescription(skill),
+      group: 'Skills'
+    }))
+
+  return {
+    items: query ? items.filter(item => item.text.slice(1).startsWith(query)) : items,
+    replace_from: 1
+  }
 }
 
 function describeOplCodexGatewayScope() {
@@ -2138,9 +2194,10 @@ function createOplCodexGateway({
       if (method === 'prompt.submit') {
         const session = sessions.get(String(params.session_id))
         if (!session) throw new Error('session not found')
+        if (session.running) throw new Error('session already has a running turn')
+        send(socket, { jsonrpc: '2.0', id, result: { ok: true, accepted: true } })
         submitPrompt(socket, session, String(params.text || ''))
-          .then(() => send(socket, { jsonrpc: '2.0', id, result: { ok: true } }))
-          .catch(error => send(socket, { jsonrpc: '2.0', id, error: { message: error instanceof Error ? error.message : String(error) } }))
+          .catch(error => log(`prompt.submit failed after ack: ${error instanceof Error ? error.message : String(error)}`))
         return
       }
       if (method === 'session.interrupt') {
@@ -2211,6 +2268,14 @@ function createOplCodexGateway({
           .catch(error => send(socket, { jsonrpc: '2.0', id, error: { message: error instanceof Error ? error.message : String(error) } }))
         return
       }
+      if (method === 'commands.catalog') {
+        send(socket, { jsonrpc: '2.0', id, result: codexSkillSlashCatalog() })
+        return
+      }
+      if (method === 'complete.slash') {
+        send(socket, { jsonrpc: '2.0', id, result: codexSkillSlashCompletions(params.text) })
+        return
+      }
       if (method === 'model.options') {
         send(socket, { jsonrpc: '2.0', id, result: modelOptions() })
         return
@@ -2253,50 +2318,68 @@ function createOplCodexGateway({
   }
 
   async function submitPrompt(socket, session, text) {
-    const userText = text.trim()
+    const userText = stripLegacyPurposeRouteReceipt(text)
     if (!userText) return
     if (session.running) throw new Error('session already has a running turn')
-    const threadId = await bindCodexThread(session)
-    session.messages.push({ role: 'user', content: userText, timestamp: nowSeconds() })
-    session.preview = session.preview || userText
-    session.lastActive = nowSeconds()
-    session.running = true
-    session.usage.calls += 1
-    session.usage.input += userText.length
-    session.usage.total = session.usage.input + session.usage.output
-    event(socket, 'session.info', session.id, runtimeInfo(session))
-    event(socket, 'message.start', session.id, { role: 'assistant' })
+    let assistantFinished = false
+    try {
+      session.messages.push({ role: 'user', content: userText, timestamp: nowSeconds() })
+      session.preview = session.preview || userText
+      session.lastActive = nowSeconds()
+      session.running = true
+      session.usage.calls += 1
+      session.usage.input += userText.length
+      session.usage.total = session.usage.input + session.usage.output
+      event(socket, 'session.info', session.id, runtimeInfo(session))
+      event(socket, 'message.start', session.id, { role: 'assistant' })
 
-    const codexSkills = await resolveRequestedCodexSkills(userText, session.cwd || defaultCwd())
-    const result = await getCodexClient(session.cwd).runTurn({
-      threadId,
-      prompt: buildPrompt(userText, session),
-      cwd: session.cwd || defaultCwd(),
-      skills: codexSkills,
-      onDelta: chunk => {
-        if (!chunk) return
-        session.usage.output += chunk.length
-        session.usage.total = session.usage.input + session.usage.output
-        event(socket, 'message.delta', session.id, { text: chunk })
-      },
-      onCodexEvent: (method, params) => {
-        if (/tool/i.test(method)) {
-          event(socket, 'tool.event', session.id, { method, params })
+      const threadId = await bindCodexThread(session)
+      const codexSkills = await resolveRequestedCodexSkills(userText, session.cwd || defaultCwd())
+      const result = await getCodexClient(session.cwd).runTurn({
+        threadId,
+        prompt: buildPrompt(userText, session),
+        cwd: session.cwd || defaultCwd(),
+        skills: codexSkills,
+        onDelta: chunk => {
+          if (!chunk) return
+          session.usage.output += chunk.length
+          session.usage.total = session.usage.input + session.usage.output
+          event(socket, 'message.delta', session.id, { text: chunk })
+        },
+        onCodexEvent: (method, params) => {
+          if (/tool/i.test(method)) {
+            event(socket, 'tool.event', session.id, { method, params })
+          }
+          if (/approval|permission|attestation/i.test(method)) {
+            event(socket, 'approval.event', session.id, { method, params })
+          }
+          if (/error/i.test(method)) {
+            event(socket, 'message.error', session.id, { method, params })
+          }
         }
-        if (/approval|permission|attestation/i.test(method)) {
-          event(socket, 'approval.event', session.id, { method, params })
-        }
-        if (/error/i.test(method)) {
-          event(socket, 'message.error', session.id, { method, params })
-        }
+      })
+      if (!result.ok && result.error) {
+        const message = result.output || result.error.message || 'Codex app-server turn failed.'
+        finishAssistant(socket, session, message)
+        assistantFinished = true
+        return
       }
-    })
-    if (!result.ok && result.error) {
-      const message = result.output || result.error.message || 'Codex app-server turn failed.'
-      finishAssistant(socket, session, message)
-      return
+      finishAssistant(socket, session, result.output || 'Done.')
+      assistantFinished = true
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (session.running) {
+        finishAssistant(socket, session, `提示词发送失败：${message}`)
+        assistantFinished = true
+      }
+      throw error
+    } finally {
+      if (!assistantFinished && session.running) {
+        session.running = false
+        session.lastActive = nowSeconds()
+        event(socket, 'session.info', session.id, runtimeInfo(session))
+      }
     }
-    finishAssistant(socket, session, result.output || 'Done.')
   }
 
   function finishAssistant(socket, session, text) {

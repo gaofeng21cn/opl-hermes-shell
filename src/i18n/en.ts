@@ -47,21 +47,21 @@ export const en: Translations = {
     desktopBootFailedWithMessage: message => `Desktop boot failed: ${message}`,
     steps: {
       connectingGateway: 'Connecting live desktop gateway',
-      loadingSettings: 'Loading Hermes settings',
+      loadingSettings: 'Loading One Person Lab settings',
       loadingSessions: 'Loading recent sessions',
       startingDesktopConnection: 'Starting desktop connection',
       startingHermesDesktop: 'Starting OPL Desktop…'
     },
     errors: {
-      backgroundExited: 'Hermes background process exited.',
-      backgroundExitedDuringStartup: 'Hermes background process exited during startup.',
+      backgroundExited: 'One Person Lab background process exited.',
+      backgroundExitedDuringStartup: 'One Person Lab background process exited during startup.',
       backendStopped: 'Backend stopped',
       desktopBootFailed: 'Desktop boot failed',
       gatewaySignInRequired: 'Gateway sign-in required',
       ipcBridgeUnavailable: 'Desktop IPC bridge is unavailable.'
     },
     failure: {
-      title: "Hermes couldn't start",
+      title: "One Person Lab couldn't start",
       description:
         "The background gateway didn't come up. Try one of the recovery steps below. Nothing here deletes your chats or settings.",
       remoteTitle: 'Remote gateway sign-in required',
@@ -98,8 +98,8 @@ export const en: Translations = {
     copyDetailFailed: 'Could not copy notification detail',
     backendOutOfDateTitle: 'Backend out of date',
     backendOutOfDateMessage:
-      'Your Hermes backend is older than this desktop build and may not work correctly. Update to align them.',
-    updateHermes: 'Update Hermes',
+      'Your One Person Lab backend is older than this desktop build and may not work correctly. Update to align them.',
+    updateHermes: 'Update One Person Lab',
     updateReadyTitle: 'Update ready',
     updateReadyMessage: count => `${count} new change${count === 1 ? '' : 's'} available.`,
     seeWhatsNew: "See what's new",
@@ -107,7 +107,7 @@ export const en: Translations = {
       elevenLabsNeedsKey: 'ElevenLabs STT needs ELEVENLABS_API_KEY.',
       elevenLabsRejectedKey: 'ElevenLabs rejected the API key (401).',
       methodNotAllowed:
-        'The desktop backend rejected that request (405 Method Not Allowed). Try restarting Hermes Desktop.',
+        'The desktop backend rejected that request (405 Method Not Allowed). Try restarting One Person Lab.',
       microphonePermission: 'Microphone permission was denied.',
       openaiRejectedApiKey: 'OpenAI rejected the API key.',
       openaiRejectedApiKeyWithStatus: status => `OpenAI rejected the API key (${status} invalid_api_key).`,
@@ -288,7 +288,7 @@ export const en: Translations = {
     exportConfig: 'Export config',
     importConfig: 'Import config',
     resetToDefaults: 'Reset to defaults',
-    resetConfirm: 'Reset all settings to Hermes defaults?',
+    resetConfirm: 'Reset all settings to One Person Lab defaults?',
     exportFailed: 'Export failed',
     resetFailed: 'Reset failed',
     nav: {
@@ -311,7 +311,7 @@ export const en: Translations = {
         'Native desktop notifications, separate from in-app toasts. These are device-local — each computer keeps its own settings.',
       enableAll: 'Enable notifications',
       enableAllDesc: 'Master switch. Turn this off to silence every notification below.',
-      focusedHint: 'Completion alerts only fire while Hermes is in the background.',
+      focusedHint: 'Completion alerts only fire while One Person Lab is in the background.',
       kinds: {
         approval: {
           label: 'Approval needed',
@@ -319,11 +319,11 @@ export const en: Translations = {
         },
         input: {
           label: 'Input needed',
-          description: 'Hermes asked a question or needs a password or secret.'
+          description: 'One Person Lab asked a question or needs a password or secret.'
         },
         turnDone: {
           label: 'Response ready',
-          description: 'A turn finished while Hermes was in the background.'
+          description: 'A turn finished while One Person Lab was in the background.'
         },
         turnError: {
           label: 'Turn failed',
@@ -335,7 +335,7 @@ export const en: Translations = {
         }
       },
       test: 'Send test notification',
-      testTitle: 'Hermes',
+      testTitle: 'One Person Lab',
       testBody: 'Notifications are working.',
       testSent: 'Test sent. If nothing appears, check your OS notification permissions and Focus/Do Not Disturb.',
       testUnsupported: 'This system does not support native notifications.',
@@ -371,7 +371,7 @@ export const en: Translations = {
       intro:
         'These are desktop-only display preferences. Mode controls brightness; theme controls the accent palette and chat surface styling.',
       colorMode: 'Color Mode',
-      colorModeDesc: 'Pick a fixed mode or let Hermes follow your system setting.',
+      colorModeDesc: 'Pick a fixed mode or let One Person Lab follow your system setting.',
       toolViewTitle: 'Tool Call Display',
       toolViewDesc: 'Product hides raw tool payloads; Technical shows full input/output.',
       translucencyTitle: 'Window Translucency',
@@ -397,7 +397,7 @@ export const en: Translations = {
     fieldLabels: FIELD_LABELS,
     fieldDescriptions: FIELD_DESCRIPTIONS,
     about: {
-      heading: 'One Person Lab Hermes Candidate',
+      heading: 'One Person Lab',
       version: value => `Version ${value}`,
       versionUnavailable: 'Version unavailable',
       updates: 'Updates',
@@ -468,7 +468,7 @@ export const en: Translations = {
       title: 'Gateway Connection',
       envOverride: 'env override',
       intro:
-        'Hermes Desktop starts its own local gateway by default. Use a remote gateway when you want this app to control an already-running Hermes backend on another machine or behind a trusted proxy. Pick a profile below to give it its own remote host.',
+        'One Person Lab starts its own local gateway by default. Use a remote gateway only when you want this app to control an already-running backend on another machine or behind a trusted proxy. Pick a profile below to give it its own remote host.',
       appliesTo: 'Applies to',
       allProfiles: 'All profiles',
       defaultConnection: 'Default connection for every profile that has no override of its own.',
@@ -478,10 +478,10 @@ export const en: Translations = {
       envOverrideDesc:
         'Unset HERMES_DESKTOP_REMOTE_URL and HERMES_DESKTOP_REMOTE_TOKEN to use the saved setting below.',
       localTitle: 'Local gateway',
-      localDesc: 'Start a private Hermes backend on localhost. This is the default and works offline.',
+      localDesc: 'Start a private local backend on localhost. This is the default and works offline.',
       remoteTitle: 'Remote gateway',
       remoteDesc:
-        'Connect this desktop shell to a remote Hermes backend. Hosted gateways use OAuth or a username and password; self-hosted ones may use a session token.',
+        'Connect this desktop shell to a remote backend. Hosted gateways use OAuth or a username and password; self-hosted ones may use a session token.',
       remoteUrlTitle: 'Remote URL',
       remoteUrlDesc: 'Base URL for the remote dashboard backend. Path prefixes are supported, for example /hermes.',
       probing: 'Checking how this gateway authenticates…',
@@ -515,9 +515,9 @@ export const en: Translations = {
       enterUrlFirst: 'Enter a remote URL first.',
       restartingTitle: 'Gateway connection restarting',
       savedTitle: 'Gateway settings saved',
-      restartingMessage: 'Hermes Desktop will reconnect using the saved settings.',
+      restartingMessage: 'One Person Lab will reconnect using the saved settings.',
       savedMessage: 'Saved for the next restart.',
-      connectedTo: (baseUrl, version) => `Connected to ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
+      connectedTo: (baseUrl, version) => `Connected to ${baseUrl}${version ? ` · backend ${version}` : ''}`,
       reachableTitle: 'Remote gateway reachable',
       signedOutTitle: 'Signed out',
       signedOutMessage: 'Cleared the remote gateway session.',
@@ -620,19 +620,25 @@ export const en: Translations = {
       failedLoad: 'Agents and capabilities failed to load',
       title: 'Agents & Capabilities',
       intro:
-        'These capabilities are loaded and invoked by Codex Skills/Plugins. The GUI only shows entry points and prompt shortcuts; it does not parse keywords, preflight MAS/MAG/RCA commands, or create domain receipts.',
+        'These are the One Person Lab capabilities Codex can call now. In chat, type /mas, /mag, /rca, or use the $mas, $mag, $rca prefixes to let Codex take over through installed Skills/Plugins.',
       emptyTitle: 'No Codex Skills available',
       emptyDesc: 'This candidate did not receive a Codex Skill catalog from the OPL gateway.',
+      chatInvocation: 'Chat invocation',
+      execution: 'Execution',
+      executionDesc: 'Codex chooses and loads the matching Skill/Plugin; the GUI only provides entry points.',
+      invocationFlow: 'Typing /mas task sends $mas task to Codex; /mag and /rca work the same way.',
       project: 'Project',
       invocation: 'Invocation',
       codexSkill: 'Codex Skill',
       skillPath: 'Skill path',
       ordinaryPath: 'Ordinary path',
       boundary: 'Authority boundary',
+      slashAvailable: 'Available in the / command palette',
+      missingHint: 'Codex did not find the matching Skill. Check the local Codex Skill/Plugin install.',
       skillReady: 'Codex found',
       skillMissing: 'Not found by Codex',
-      skillBoundary: 'Codex chooses and invokes it; GUI does not own domain authority',
-      noDomainTruth: 'GUI does not write domain truth / owner receipts / domain-ready claims'
+      skillBoundary: 'Codex invokes it; GUI does not own domain authority',
+      noDomainTruth: 'Domain truth, owner receipts, and domain-ready claims stay with the owning OPL agent and repo'
     },
     sessions: {
       loading: 'Loading archived sessions…',
@@ -789,7 +795,7 @@ export const en: Translations = {
     },
     nav: {
       newChat: { title: 'New session', detail: 'Start a fresh session' },
-      settings: { title: 'Settings', detail: 'Configure Hermes desktop' },
+      settings: { title: 'Settings', detail: 'Configure One Person Lab desktop' },
       skills: { title: 'Skills & Tools', detail: 'Enable skills, toolsets, and providers' },
       messaging: { title: 'Messaging', detail: 'Set up Telegram, Slack, Discord, and more' },
       artifacts: { title: 'Artifacts', detail: 'Browse generated outputs' }
@@ -811,9 +817,9 @@ export const en: Translations = {
     noSessions: 'No sessions yet.',
     gatewayRunning: 'Messaging gateway running',
     gatewayStopped: 'Messaging gateway stopped',
-    hermesActiveSessions: (version, count) => `Hermes ${version} · Active sessions ${count}`,
+    hermesActiveSessions: (version, count) => `One Person Lab ${version} · Active sessions ${count}`,
     restartMessaging: 'Restart messaging',
-    updateHermes: 'Update Hermes',
+    updateHermes: 'Update One Person Lab',
     actionRunning: 'running',
     actionDone: 'done',
     actionFailed: 'failed',
@@ -1473,7 +1479,7 @@ export const en: Translations = {
     settingUpTitle: 'Initializing One Person Lab',
     finishingTitle: 'Finishing up',
     failedDesc:
-      'One of the initialization steps failed. Check the details below or the desktop log for the full transcript. This path does not install Hermes Agent.',
+      'One of the initialization steps failed. Check the details below or the desktop log for the full transcript. This path prepares One Person Lab and does not install a separate agent runtime.',
     activeDesc:
       'This is a one-time local initialization. One Person Lab is checking local CLI tools and required components. Model access is configured separately after this step.',
     progress: (completed, total) => `${completed} of ${total} steps complete`,
@@ -1643,7 +1649,7 @@ export const en: Translations = {
       update: 'update',
       updateInProgress: 'Update in progress',
       commitsBehind: (count, branch) => `${count} commit${count === 1 ? '' : 's'} behind ${branch}`,
-      desktopVersion: version => `Hermes Desktop v${version}`,
+      desktopVersion: version => `One Person Lab v${version}`,
       backendVersion: version => `Backend v${version}`,
       clientLabel: version => `client v${version}`,
       backendLabel: version => `backend v${version}`,
@@ -1933,8 +1939,8 @@ export const en: Translations = {
     sessionExportFailed: 'Could not export session',
     imageSaved: 'Image saved',
     downloadStarted: 'Download started',
-    restartToUseSaveImage: 'Restart Hermes Desktop to use Save Image.',
-    restartToSaveImages: 'Restart Hermes Desktop to save images',
+    restartToUseSaveImage: 'Restart One Person Lab to use Save Image.',
+    restartToSaveImages: 'Restart One Person Lab to save images',
     imageDownloadFailed: 'Image download failed',
     openImage: 'Open image',
     downloadImage: 'Download image',

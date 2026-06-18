@@ -119,6 +119,7 @@ if (USER_DATA_OVERRIDE) {
 
 const DEV_SERVER = process.env.HERMES_DESKTOP_DEV_SERVER
 const OPL_CODEX_CANDIDATE = process.env.OPL_HERMES_CODEX_CANDIDATE !== '0'
+const OPL_SMOKE_NO_FOREGROUND = process.env.OPL_HERMES_SMOKE_NO_FOREGROUND === '1'
 const IS_PACKAGED = app.isPackaged
 const IS_MAC = process.platform === 'darwin'
 const IS_WINDOWS = process.platform === 'win32'
@@ -3440,6 +3441,7 @@ function sendOpenUpdatesRequested() {
   const { webContents } = mainWindow
   if (!webContents || webContents.isDestroyed()) return
   webContents.send('hermes:open-updates')
+  if (OPL_SMOKE_NO_FOREGROUND) return
   if (!mainWindow.isVisible()) mainWindow.show()
   mainWindow.focus()
 }
@@ -5237,6 +5239,7 @@ const sessionWindows = createSessionWindowRegistry()
 
 function focusWindow(win) {
   if (!win || win.isDestroyed()) return
+  if (OPL_SMOKE_NO_FOREGROUND) return
   if (win.isMinimized()) win.restore()
   if (!win.isVisible()) win.show()
   win.focus()
@@ -5279,6 +5282,7 @@ function spawnSecondaryWindow({ sessionId, watch, newSession } = {}) {
   }
 
   win.once('ready-to-show', () => {
+    if (OPL_SMOKE_NO_FOREGROUND) return
     if (!win.isDestroyed()) win.show()
   })
 
@@ -5374,6 +5378,7 @@ function createWindow() {
   }
 
   mainWindow.once('ready-to-show', () => {
+    if (OPL_SMOKE_NO_FOREGROUND) return
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show()
   })
 
@@ -5809,6 +5814,7 @@ ipcMain.handle('hermes:api', async (_event, request) => {
 })
 
 ipcMain.handle('hermes:notify', (_event, payload) => {
+  if (OPL_SMOKE_NO_FOREGROUND) return false
   if (!Notification.isSupported()) return false
   // Action buttons render only on signed macOS builds; elsewhere they're dropped
   // and the body click still works.
@@ -5821,6 +5827,7 @@ ipcMain.handle('hermes:notify', (_event, payload) => {
   })
   notification.on('click', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return
+    if (OPL_SMOKE_NO_FOREGROUND) return
     focusWindow(mainWindow)
     if (payload?.sessionId) {
       mainWindow.webContents.send('hermes:focus-session', payload.sessionId)
@@ -6601,6 +6608,7 @@ function handleDeepLink(url) {
     return
   }
   try {
+    if (OPL_SMOKE_NO_FOREGROUND) return
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()
     mainWindow.webContents.send('hermes:deep-link', payload)
@@ -6650,6 +6658,7 @@ if (!_gotSingleInstanceLock) {
     const url = _extractDeepLink(argv)
     if (url) handleDeepLink(url)
     else if (mainWindow) {
+      if (OPL_SMOKE_NO_FOREGROUND) return
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
     }
@@ -6682,6 +6691,7 @@ app.whenReady().then(() => {
   if (_coldStartLink) handleDeepLink(_coldStartLink)
 
   app.on('activate', () => {
+    if (OPL_SMOKE_NO_FOREGROUND) return
     // Recreate the primary window if it's gone. Guard on mainWindow directly
     // (not just total window count) so a dock click still restores the main
     // window when only secondary session windows remain open.

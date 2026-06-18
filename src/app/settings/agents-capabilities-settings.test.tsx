@@ -19,7 +19,7 @@ afterEach(() => {
 })
 
 describe('AgentsCapabilitiesSettings', () => {
-  it('renders OPL Codex skills as read-only capability entries', async () => {
+  it('renders OPL Codex skills as user-facing chat invocation entries', async () => {
     getOplCodexSkills.mockResolvedValue({
       surface_kind: 'opl_hermes_codex_skill_catalog.v1',
       route_owner: 'codex',
@@ -79,11 +79,13 @@ describe('AgentsCapabilitiesSettings', () => {
     expect(await screen.findByText('Med Auto Science')).toBeTruthy()
     expect(screen.getByText('Med Auto Grant')).toBeTruthy()
     expect(screen.getAllByText('Codex 已发现').length).toBe(2)
+    expect(screen.getByText('/mas')).toBeTruthy()
+    expect(screen.getByText('/mag')).toBeTruthy()
     expect(screen.getByText('$mas')).toBeTruthy()
     expect(screen.getByText('$mag')).toBeTruthy()
-    expect(screen.getByText('mas')).toBeTruthy()
-    expect(screen.getByText('mag')).toBeTruthy()
-    expect(screen.getAllByText(/GUI 不写领域真相/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/已加入 \/ 命令面板/).length).toBe(2)
+    expect(screen.getAllByText(/领域真相/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/medautoscience/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/SKILL\.md/)).toBeNull()
   })
 })

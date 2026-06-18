@@ -131,6 +131,12 @@ function respond(id, result) {
 function skill(name, description) {
   return { name, description, path: '/fixture/codex/skills/' + name + '/SKILL.md', scope: 'USER', enabled: true }
 }
+function inputText(request) {
+  return (request.params?.input || [])
+    .filter(input => input?.type === 'text')
+    .map(input => String(input.text || ''))
+    .join('\\n')
+}
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', chunk => {
   buffer += chunk
@@ -167,10 +173,14 @@ function handle(request) {
     return
   }
   if (request.method === 'turn/start') {
+    const text = inputText(request)
+    const isLongTurn = text.includes('long turn packaged smoke')
     respond(request.id, { turn: { id: 'turn-fixture', status: 'running' } })
     write({ jsonrpc: '2.0', method: 'turn/started', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'running' } } })
-    write({ jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { threadId: request.params?.threadId || 'thread-fixture', turnId: 'turn-fixture', delta: 'fixture codex response' } })
-    write({ jsonrpc: '2.0', method: 'turn/completed', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'completed' } } })
+    write({ jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { threadId: request.params?.threadId || 'thread-fixture', turnId: 'turn-fixture', delta: isLongTurn ? 'fixture long response' : 'fixture codex response' } })
+    const complete = () => write({ jsonrpc: '2.0', method: 'turn/completed', params: { threadId: request.params?.threadId || 'thread-fixture', turn: { id: 'turn-fixture', status: 'completed' } } })
+    if (isLongTurn) setTimeout(complete, 6000)
+    else complete()
     return
   }
   if (request.method === 'turn/abort') {
@@ -399,7 +409,7 @@ function requestRpcOnSocket(socket, method, params = {}) {
 async function waitForGatewayFrame(frames, predicate, label) {
   const started = Date.now()
   while (Date.now() - started < smokeTimeoutMs) {
-    const frame = frames.find(predicate)
+    const frame = frames.find((entry, index) => predicate(entry, index))
     if (frame) return frame
     await sleep(100)
   }
@@ -454,6 +464,7 @@ async function runLaunch({
     HERMES_DESKTOP_USER_DATA_DIR: userData,
     HERMES_HOME: hermesHome,
     OPL_HERMES_CODEX_CANDIDATE: '1',
+    OPL_HERMES_SMOKE_NO_FOREGROUND: '1',
     OPL_HERMES_SMOKE_EXPOSE_DESCRIPTOR: '1',
     PATH: `${binDir}${path.delimiter}${process.env.PATH || ''}`
   }
@@ -638,6 +649,17 @@ async function runLaunch({
       )
       chatEvidence.skill_input_forwarded = true
     }
+    if (chatEvidence?.legacy_route_strip_checked) {
+      const longTurnStart = newCodexCalls
+        .filter(call => call.method === 'turn/start')
+        .find(call => call.params?.input?.some(input => input.type === 'text' && String(input.text || '').includes('long turn packaged smoke')))
+      const promptText = longTurnStart?.params?.input?.find(input => input.type === 'text')?.text || ''
+      assert(longTurnStart, `${name}: long prompt did not reach Codex turn/start`)
+      assert(!/OPL purpose route receipt/i.test(promptText), `${name}: legacy route receipt reached Codex prompt`)
+      assert(!/route_readback_ready/i.test(promptText), `${name}: legacy route readback status reached Codex prompt`)
+      assert(!/Opl route/i.test(promptText), `${name}: legacy Opl route label reached Codex prompt`)
+      chatEvidence.legacy_route_stripped_packaged = true
+    }
     return {
       calls: newCalls,
       codexCalls: newCodexCalls,
@@ -738,7 +760,7 @@ async function clickSkipToChat({ debugPort, logPath, name }) {
     )
     return {
       clicked: true,
-      renderer_main_visible_after_skip: true,
+      renderer_main_ready_after_skip: true,
       deferred_log_seen: true,
       gateway_port: gatewayPortFromLog(text)
     }
@@ -756,12 +778,13 @@ async function exerciseGatewayConversation({ wsUrl, exerciseSkillPrompt, name })
 
   try {
     const session = await requestRpcOnSocket(socket, 'session.create')
-    await requestRpcOnSocket(socket, 'prompt.submit', {
+    const firstSubmit = await requestRpcOnSocket(socket, 'prompt.submit', {
       session_id: session.session_id,
       text: exerciseSkillPrompt
         ? '$mas 检查糖尿病 002、003 两篇论文的进展'
         : '请回复一句 packaged Codex smoke。'
     })
+    assert(firstSubmit?.accepted === true, `${name}: first prompt.submit was not acknowledged immediately`)
     await waitForGatewayFrame(frames, frame => frame.params?.type === 'message.complete', `${name} message.complete`)
 
     const assistantDelta = frames
@@ -775,11 +798,54 @@ async function exerciseGatewayConversation({ wsUrl, exerciseSkillPrompt, name })
     )
     assert(!routeFrame, `${name}: GUI-side route event leaked into Codex Skill flow`)
 
+    const longPromptFrameStart = frames.length
+    const longPrompt = [
+      'Opl route',
+      'OPL purpose route receipt:',
+      '{',
+      '  "status": "route_readback_ready",',
+      '  "app_action_dry_run": { "command": "opl workspace ensure" }',
+      '}',
+      '',
+      '用户输入：',
+      'long turn packaged smoke: 请回复一句长回复测试。',
+      '',
+      `session: ${session.session_id}`,
+      'cwd: /tmp'
+    ].join('\n')
+    const submitStartedAt = Date.now()
+    const longSubmit = await requestRpcOnSocket(socket, 'prompt.submit', {
+      session_id: session.session_id,
+      text: longPrompt
+    })
+    const longSubmitMs = Date.now() - submitStartedAt
+    assert(longSubmit?.accepted === true, `${name}: long prompt.submit was not acknowledged`)
+    assert(longSubmitMs < 3000, `${name}: long prompt.submit ack was too slow: ${longSubmitMs}ms`)
+    await waitForGatewayFrame(
+      frames,
+      (frame, index) => index >= longPromptFrameStart && frame.params?.type === 'message.delta',
+      `${name} long message.delta`
+    )
+    await sleep(500)
+    assert(
+      !frames.slice(longPromptFrameStart).some(frame => frame.params?.type === 'message.complete'),
+      `${name}: long turn completed before the immediate-ack window was checked`
+    )
+    await waitForGatewayFrame(
+      frames,
+      (frame, index) => index >= longPromptFrameStart && frame.params?.type === 'message.complete',
+      `${name} long message.complete`
+    )
+
     return {
       session_id: session.session_id,
       message_complete: true,
       assistant_delta: assistantDelta,
       skill_prompt_forwarded: Boolean(exerciseSkillPrompt),
+      prompt_submit_long_turn_immediate_ack: true,
+      prompt_submit_long_turn_ack_ms: longSubmitMs,
+      prompt_submit_long_turn_completed_after_ack: true,
+      legacy_route_strip_checked: true,
       route_event_type: null,
       frame_count: frames.length
     }

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { getOplCodexSkills } from '@/hermes'
 import { useI18n } from '@/i18n'
-import { Brain, CheckCircle2 } from '@/lib/icons'
+import { Brain, CheckCircle2, Sparkles } from '@/lib/icons'
 import { notifyError } from '@/store/notifications'
 import type { OplCodexSkillCatalog } from '@/types/hermes'
 
@@ -46,9 +46,12 @@ export function AgentsCapabilitiesSettings() {
 
   return (
     <SettingsContent>
-      <SectionHeading icon={Brain} meta={catalog?.bridge_mode} title={copy.title} />
+      <SectionHeading icon={Brain} title={copy.title} />
       <p className="mb-5 max-w-3xl text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
         {copy.intro}
+      </p>
+      <p className="mb-5 max-w-3xl rounded-lg border border-border/45 bg-(--ui-bg-secondary) px-3 py-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-foreground/78">
+        {copy.invocationFlow}
       </p>
 
       {skills.length === 0 ? (
@@ -66,28 +69,32 @@ export function AgentsCapabilitiesSettings() {
               below={
                 <div className="mt-3 grid gap-1.5 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
                   <div>
-                    <span className="font-medium text-foreground/80">{copy.invocation}: </span>
+                    <span className="font-medium text-foreground/80">{copy.chatInvocation}: </span>
+                    <code>/{skill.skill_id}</code>
+                    <span className="mx-1 text-muted-foreground/60">或</span>
                     <code>{skill.invocation}</code>
                   </div>
                   <div>
-                    <span className="font-medium text-foreground/80">{copy.codexSkill}: </span>
-                    <code>{skill.codex_skill_name || '-'}</code>
+                    <span className="font-medium text-foreground/80">{copy.execution}: </span>
+                    {copy.executionDesc}
                   </div>
                   <div>
-                    <span className="font-medium text-foreground/80">{copy.skillPath}: </span>
-                    <code>{skill.codex_skill_path || '-'}</code>
-                  </div>
-                  <div>
-                    <span className="font-medium text-foreground/80">{copy.ordinaryPath}: </span>
-                    {skill.ordinary_golden_path}
+                    <span className="font-medium text-foreground/80">{copy.project}: </span>
+                    {skill.project_id}
                   </div>
                   <div>
                     <span className="font-medium text-foreground/80">{copy.boundary}: </span>
                     {copy.noDomainTruth}
                   </div>
+                  {skill.available && (
+                    <div className="inline-flex items-center gap-1.5 text-foreground/75">
+                      <Sparkles className="size-3.5" />
+                      {copy.slashAvailable}
+                    </div>
+                  )}
                 </div>
               }
-              description={`${copy.project}: ${skill.project_id} · ${copy.skillBoundary}`}
+              description={skill.available ? copy.skillBoundary : copy.missingHint}
               key={skill.skill_id}
               title={skill.label}
               wide

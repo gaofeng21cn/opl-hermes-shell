@@ -124,6 +124,10 @@ export function chatMessageText(message: ChatMessage): string {
 const ATTACHED_CONTEXT_MARKER_RE = /(?:^|\n)--- Attached Context ---\s*\n/
 const CONTEXT_WARNINGS_MARKER_RE = /(?:^|\n)--- Context Warnings ---[\s\S]*$/
 const CONTEXT_REF_RE = /@(file|folder|url|image|tool|terminal):(?:"[^"\n]+"|'[^'\n]+'|`[^`\n]+`|\S+)/g
+const LEGACY_OPL_PURPOSE_ROUTE_RECEIPT_RE =
+  /OPL purpose route receipt:\s*\{[\s\S]*?(?=\n\n用户输入：|\n\nsession:|\n用户输入：|$)/g
+const LEGACY_OPL_ROUTE_LINE_RE = /^\s*Opl route\s*$/gim
+const LEGACY_OPL_WRAPPED_USER_RE = /用户输入：\s*([\s\S]*?)(?:\n\nsession:\s*\S+\s*\ncwd:\s*.*)?$/
 
 function textFromUnknown(value: unknown, depth = 0): string {
   if (typeof value === 'string') {
@@ -162,7 +166,7 @@ function textFromUnknown(value: unknown, depth = 0): string {
 }
 
 function displayContentForMessage(role: SessionMessage['role'], content: unknown): string {
-  const textContent = textFromUnknown(content)
+  const textContent = stripLegacyOplRouteWrapper(textFromUnknown(content))
 
   if (role !== 'user') {
     return textContent
@@ -179,6 +183,13 @@ function displayContentForMessage(role: SessionMessage['role'], content: unknown
   const refs = [...new Set(Array.from(attachedContext.matchAll(CONTEXT_REF_RE)).map(match => match[0]))]
 
   return [refs.join('\n'), visibleText].filter(Boolean).join('\n\n') || visibleText
+}
+
+export function stripLegacyOplRouteWrapper(text: string): string {
+  const stripped = text.replace(LEGACY_OPL_PURPOSE_ROUTE_RECEIPT_RE, '').replace(LEGACY_OPL_ROUTE_LINE_RE, '').trim()
+  const userText = stripped.match(LEGACY_OPL_WRAPPED_USER_RE)?.[1]?.trim()
+
+  return userText || stripped
 }
 
 const STREAM_PART: Record<'reasoning' | 'text', (text: string) => ChatMessagePart> = {

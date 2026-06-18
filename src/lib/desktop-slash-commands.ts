@@ -34,6 +34,7 @@ export type DesktopActionId =
   | 'handoff'
   | 'help'
   | 'new'
+  | 'opl-skill'
   | 'profile'
   | 'skin'
   | 'title'
@@ -110,6 +111,19 @@ const DESKTOP_COMMAND_SPECS: readonly DesktopCommandSpec[] = [
     surface: action('browser'),
     args: true
   },
+  {
+    name: '/mas',
+    description: '用 Codex Skill 调用 Med Auto Science',
+    surface: action('opl-skill'),
+    args: true
+  },
+  {
+    name: '/mag',
+    description: '用 Codex Skill 调用 Med Auto Grant',
+    surface: action('opl-skill'),
+    args: true
+  },
+  { name: '/rca', description: '用 Codex Skill 调用 RedCube AI', surface: action('opl-skill'), args: true },
 
   // Overlay pickers
   { name: '/model', description: 'Switch the model for this session', surface: picker('model'), hidden: true },
@@ -138,7 +152,7 @@ const DESKTOP_COMMAND_SPECS: readonly DesktopCommandSpec[] = [
   { name: '/tools', description: 'List or toggle tools available to the agent', surface: exec(), args: true },
   { name: '/undo', description: 'Remove the last user/assistant exchange', surface: exec() },
   { name: '/usage', description: 'Show token usage for this session', surface: exec() },
-  { name: '/version', description: 'Show Hermes Agent version', surface: exec() },
+  { name: '/version', description: 'Show One Person Lab desktop version', surface: exec() },
 
   // No desktop surface, but carry an alias (underscore spelling variants).
   { name: '/reload-mcp', aliases: ['/reload_mcp'], surface: unavailable('advanced') },

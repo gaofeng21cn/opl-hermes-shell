@@ -155,6 +155,32 @@ describe('toChatMessages', () => {
 
     expect(chatMessageText(message)).toBe('@file:foo.ts\n\nlook')
   })
+
+  it('strips legacy OPL route receipts from hydrated user messages', () => {
+    const [message] = toChatMessages([
+      {
+        role: 'user',
+        content: [
+          'Opl route',
+          '',
+          'OPL purpose route receipt:',
+          '{',
+          '  "status": "route_readback_ready",',
+          '  "app_action_dry_run": { "command": "opl workspace ensure" }',
+          '}',
+          '',
+          '用户输入：',
+          '科研 / MAS：你现在可以调用哪些skill？',
+          '',
+          'session: opl-old',
+          'cwd: /tmp'
+        ].join('\n'),
+        timestamp: 1
+      }
+    ])
+
+    expect(chatMessageText(message)).toBe('科研 / MAS：你现在可以调用哪些skill？')
+  })
 })
 
 describe('renderMediaTags', () => {

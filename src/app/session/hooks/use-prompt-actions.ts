@@ -1217,6 +1217,18 @@ export function usePromptActions({
           } catch (err) {
             renderSlashOutput(`error: ${err instanceof Error ? err.message : String(err)}`)
           }
+        },
+        'opl-skill': async ({ arg, name }) => {
+          const skill = name.trim().toLowerCase()
+          const prompt = `$${skill}${arg.trim() ? ` ${arg.trim()}` : ''}`
+
+          if (busyRef.current) {
+            notify({ kind: 'error', message: copy.sessionBusy })
+
+            return
+          }
+
+          await submitPromptText(prompt)
         }
       }
 

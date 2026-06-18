@@ -193,7 +193,12 @@ export function useSlashCompletions(options: {
 
         const items = isArgCompletion
           ? decorated
-          : [...decorated].sort((a, b) => groupOrder.indexOf(a.group) - groupOrder.indexOf(b.group))
+          : [...decorated].sort((a, b) => {
+              const left = groupOrder.includes(a.group) ? groupOrder.indexOf(a.group) : groupOrder.indexOf('Skills')
+              const right = groupOrder.includes(b.group) ? groupOrder.indexOf(b.group) : groupOrder.indexOf('Skills')
+
+              return left - right
+            })
 
         return { items, query }
       } catch {

@@ -124,6 +124,20 @@ npm run package
 npm run validate:candidate -- --require-app
 ```
 
+`--require-app` 只检查候选包和默认静默 packaged first-run smoke。默认验证不应打开或
+聚焦本机前台窗口；`smoke:opl-first-run` 会设置
+`OPL_HERMES_SMOKE_NO_FOREGROUND=1`。
+
+截图/视觉验收单独执行，优先放到 VM/Tart：
+
+```bash
+npm run smoke:settings-visual -- --allow-foreground --out out/smoke-settings-visual
+npm run validate:candidate -- --require-visual-smoke
+```
+
+不要在用户正在使用的主机桌面默认运行 Settings visual smoke；它会打开并聚焦候选
+`.app` 以截取页面。
+
 本地候选包输出路径：
 
 ```text

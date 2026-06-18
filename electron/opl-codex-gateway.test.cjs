@@ -267,7 +267,8 @@ test('OPL Codex gateway scope helper documents executor bridge ownership', () =>
   assert.equal(isOplCodexBridgeRpcMethod('config.set'), true)
   assert.equal(isOplCodexBridgeRpcMethod('codex.skills'), true)
   assert.equal(isOplCodexBridgeRpcMethod('purpose.route.resolve'), false)
-  assert.equal(isOplCodexBridgeRpcMethod('commands.catalog'), false)
+  assert.equal(isOplCodexBridgeRpcMethod('commands.catalog'), true)
+  assert.equal(isOplCodexBridgeRpcMethod('complete.slash'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/model/options'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/model/auxiliary'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/providers/oauth'), true)
@@ -276,7 +277,6 @@ test('OPL Codex gateway scope helper documents executor bridge ownership', () =>
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/opl/codex-skills'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/opl/purpose-routes'), false)
   assert.equal(scope.upstreamHermesBackendOwns.includes('profiles'), true)
-  assert.equal(scope.upstreamHermesBackendOwns.includes('command catalog'), true)
   assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'mas' && skill.invocation === '$mas'), true)
   assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'mag' && skill.invocation === '$mag'), true)
   assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'rca' && skill.invocation === '$rca'), true)
@@ -395,12 +395,18 @@ test('OPL Codex gateway refuses non-bootstrap official Hermes backend REST endpo
   })
 })
 
-test('OPL Codex gateway refuses official Hermes backend RPC methods instead of returning empty success', async () => {
+test('OPL Codex gateway exposes a minimal slash catalog for OPL Codex Skills', async () => {
   await withGateway(async descriptor => {
-    await assert.rejects(
-      () => requestRpc(descriptor.wsUrl, 'commands.catalog'),
-      /opl_codex_bridge_not_full_backend|Hermes backend owns this route/
-    )
+    const catalog = await requestRpc(descriptor.wsUrl, 'commands.catalog')
+    assert.deepEqual(catalog.pairs.map(pair => pair[0]), ['/mas', '/mag', '/rca'])
+
+    const completions = await requestRpc(descriptor.wsUrl, 'complete.slash', { text: '/m' })
+    assert.deepEqual(completions.items.map(item => item.text), ['/mas', '/mag'])
+  })
+})
+
+test('OPL Codex gateway refuses unsupported official Hermes backend RPC methods instead of returning empty success', async () => {
+  await withGateway(async descriptor => {
     await assert.rejects(
       () => requestRpc(descriptor.wsUrl, 'complete.path', { prefix: '/tmp' }),
       /opl_codex_bridge_not_full_backend|Hermes backend owns this route/
@@ -695,6 +701,121 @@ test('OPL Codex gateway leaves explicit skill invocation to Codex without route 
     }
     require('node:fs').rmSync(fixtureLog, { force: true })
   }
+})
+
+test('OPL Codex gateway acknowledges prompt.submit before a long Codex turn completes', async () => {
+  let resolveTurn
+  const appServerClient = {
+    startThread: async () => ({ thread: { id: 'thread-long' } }),
+    listSkills: async () => ({ data: [] }),
+    runTurn: async ({ onDelta }) => {
+      onDelta('partial response')
+      await new Promise(resolve => {
+        resolveTurn = resolve
+      })
+      return { ok: true, output: 'partial response complete', backend: 'fixture' }
+    },
+    stop: () => undefined
+  }
+
+  await withGateway(
+    async descriptor => {
+      const socket = await openGatewaySocket(descriptor.wsUrl)
+      const frames = []
+      socket.addEventListener('message', event => {
+        frames.push(JSON.parse(String(event.data)))
+      })
+
+      const session = await requestRpcOnSocket(socket, 'session.create')
+      const submit = await requestRpcOnSocket(socket, 'prompt.submit', {
+        session_id: session.session_id,
+        text: 'long turn'
+      })
+
+      assert.deepEqual(submit, { ok: true, accepted: true })
+      assert.equal(frames.some(frame => frame.params?.type === 'message.delta'), true)
+      assert.equal(frames.some(frame => frame.params?.type === 'message.complete'), false)
+
+      resolveTurn()
+
+      await new Promise((resolve, reject) => {
+        const started = Date.now()
+        const timer = setInterval(() => {
+          if (frames.some(frame => frame.params?.type === 'message.complete')) {
+            clearInterval(timer)
+            resolve()
+          } else if (Date.now() - started > 2000) {
+            clearInterval(timer)
+            reject(new Error('timeout waiting for long message.complete'))
+          }
+        }, 20)
+      })
+
+      socket.close()
+    },
+    { appServerClient }
+  )
+})
+
+test('OPL Codex gateway strips legacy purpose route receipts before sending prompt to Codex', async () => {
+  let capturedPrompt = ''
+  const appServerClient = {
+    startThread: async () => ({ thread: { id: 'thread-strip' } }),
+    listSkills: async () => ({ data: [] }),
+    runTurn: async ({ prompt }) => {
+      capturedPrompt = prompt
+      return { ok: true, output: 'ok', backend: 'fixture' }
+    },
+    stop: () => undefined
+  }
+
+  await withGateway(
+    async descriptor => {
+      const socket = await openGatewaySocket(descriptor.wsUrl)
+      const frames = []
+      socket.addEventListener('message', event => {
+        frames.push(JSON.parse(String(event.data)))
+      })
+
+      const session = await requestRpcOnSocket(socket, 'session.create')
+      await requestRpcOnSocket(socket, 'prompt.submit', {
+        session_id: session.session_id,
+        text: [
+          'OPL purpose route receipt:',
+          '{',
+          '  "status": "route_readback_ready",',
+          '  "app_action_dry_run": { "command": "opl workspace ensure" }',
+          '}',
+          '',
+          '用户输入：',
+          '科研 / MAS：你现在可以调用哪些skill？',
+          '',
+          `session: ${session.session_id}`,
+          'cwd: /tmp'
+        ].join('\n')
+      })
+
+      await new Promise((resolve, reject) => {
+        const started = Date.now()
+        const timer = setInterval(() => {
+          if (frames.some(frame => frame.params?.type === 'message.complete')) {
+            clearInterval(timer)
+            resolve()
+          } else if (Date.now() - started > 2000) {
+            clearInterval(timer)
+            reject(new Error('timeout waiting for stripped message.complete'))
+          }
+        }, 20)
+      })
+
+      assert.match(capturedPrompt, /科研 \/ MAS：你现在可以调用哪些skill？/)
+      assert.doesNotMatch(capturedPrompt, /OPL purpose route receipt/)
+      assert.doesNotMatch(capturedPrompt, /route_readback_ready/)
+      assert.doesNotMatch(capturedPrompt, /opl workspace ensure/)
+      socket.close()
+    },
+    { appServerClient }
+  )
 })
 
 test('OPL Codex gateway does not auto-route ordinary Chinese research prompts to MAS', async () => {

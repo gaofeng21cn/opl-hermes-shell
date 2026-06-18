@@ -63,6 +63,15 @@ describe('desktop slash command curation', () => {
     expect(resolveDesktopCommand('/browser')?.args).toBe(true)
   })
 
+  it('surfaces OPL Codex Skill shortcuts as desktop action commands', () => {
+    expect(isDesktopSlashSuggestion('/mas')).toBe(true)
+    expect(isDesktopSlashSuggestion('/mag')).toBe(true)
+    expect(isDesktopSlashSuggestion('/rca')).toBe(true)
+    expect(isDesktopSlashCommand('/mas')).toBe(true)
+    expect(resolveDesktopCommand('/mas')?.surface).toEqual({ kind: 'action', action: 'opl-skill' })
+    expect(resolveDesktopCommand('/mas')?.args).toBe(true)
+  })
+
   it('allows aliases to execute without cluttering the popover', () => {
     expect(isDesktopSlashSuggestion('/reset')).toBe(false)
     expect(isDesktopSlashCommand('/reset')).toBe(true)

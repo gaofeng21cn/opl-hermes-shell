@@ -47,21 +47,21 @@ export const zh: Translations = {
     desktopBootFailedWithMessage: message => `桌面启动失败：${message}`,
     steps: {
       connectingGateway: '正在连接桌面网关',
-      loadingSettings: '正在加载 Hermes 设置',
+      loadingSettings: '正在加载 One Person Lab 设置',
       loadingSessions: '正在加载最近会话',
       startingDesktopConnection: '正在启动桌面连接',
       startingHermesDesktop: '正在启动 OPL 桌面版…'
     },
     errors: {
-      backgroundExited: 'Hermes 后台进程已退出。',
-      backgroundExitedDuringStartup: 'Hermes 后台进程在启动期间退出。',
+      backgroundExited: 'One Person Lab 后台进程已退出。',
+      backgroundExitedDuringStartup: 'One Person Lab 后台进程在启动期间退出。',
       backendStopped: '后端已停止',
       desktopBootFailed: '桌面启动失败',
       gatewaySignInRequired: '需要登录网关',
       ipcBridgeUnavailable: '桌面 IPC 桥不可用。'
     },
     failure: {
-      title: 'Hermes 无法启动',
+      title: 'One Person Lab 无法启动',
       description: '后台网关没有启动。请尝试下面的恢复步骤；这里不会删除你的对话或设置。',
       remoteTitle: '需要重新登录远程网关',
       remoteDescription: '你的远程网关会话已过期。请重新登录以恢复连接。这些操作不会删除你的对话或设置。',
@@ -95,15 +95,15 @@ export const zh: Translations = {
     copyDetail: '复制详情',
     copyDetailFailed: '无法复制通知详情',
     backendOutOfDateTitle: '后端版本过旧',
-    backendOutOfDateMessage: '你的 Hermes 后端早于当前桌面构建，可能无法正常工作。请更新以保持一致。',
-    updateHermes: '更新 Hermes',
+    backendOutOfDateMessage: '你的 One Person Lab 后台组件早于当前桌面构建，可能无法正常工作。请更新以保持一致。',
+    updateHermes: '更新 One Person Lab',
     updateReadyTitle: '有可用更新',
     updateReadyMessage: count => `有 ${count} 项新更改可用。`,
     seeWhatsNew: '查看更新内容',
     errors: {
       elevenLabsNeedsKey: 'ElevenLabs STT 需要 ELEVENLABS_API_KEY。',
       elevenLabsRejectedKey: 'ElevenLabs 拒绝了该 API key (401)。',
-      methodNotAllowed: '桌面后端拒绝了该请求 (405 Method Not Allowed)。请尝试重启 Hermes Desktop。',
+      methodNotAllowed: '桌面后端拒绝了该请求 (405 Method Not Allowed)。请尝试重启 One Person Lab。',
       microphonePermission: '麦克风权限已被拒绝。',
       openaiRejectedApiKey: 'OpenAI 拒绝了该 API key。',
       openaiRejectedApiKeyWithStatus: status => `OpenAI 拒绝了该 API key (${status} invalid_api_key)。`,
@@ -284,7 +284,7 @@ export const zh: Translations = {
     exportConfig: '导出配置',
     importConfig: '导入配置',
     resetToDefaults: '恢复默认',
-    resetConfirm: '将所有设置恢复为 Hermes 默认值？',
+    resetConfirm: '将所有设置恢复为 One Person Lab 默认值？',
     exportFailed: '导出失败',
     resetFailed: '重置失败',
     nav: {
@@ -306,7 +306,7 @@ export const zh: Translations = {
       intro: '原生桌面通知，区别于应用内提示。设置按设备保存，每台电脑各自独立。',
       enableAll: '启用通知',
       enableAllDesc: '总开关。关闭后将静音下方所有通知。',
-      focusedHint: '完成提醒仅在 Hermes 处于后台时触发。',
+      focusedHint: '完成提醒仅在 One Person Lab 处于后台时触发。',
       kinds: {
         approval: {
           label: '需要批准',
@@ -314,11 +314,11 @@ export const zh: Translations = {
         },
         input: {
           label: '需要输入',
-          description: 'Hermes 提出了问题，或需要密码或密钥。'
+          description: 'One Person Lab 提出了问题，或需要密码或密钥。'
         },
         turnDone: {
           label: '回复就绪',
-          description: 'Hermes 在后台时完成了一轮对话。'
+          description: 'One Person Lab 在后台时完成了一轮对话。'
         },
         turnError: {
           label: '本轮失败',
@@ -330,7 +330,7 @@ export const zh: Translations = {
         }
       },
       test: '发送测试通知',
-      testTitle: 'Hermes',
+      testTitle: 'One Person Lab',
       testBody: '通知工作正常。',
       testSent: '测试已发送。如果没有出现，请检查系统通知权限和专注模式／勿扰模式。',
       testUnsupported: '此系统不支持原生通知。',
@@ -365,7 +365,7 @@ export const zh: Translations = {
       title: '外观',
       intro: '这些是仅桌面端的显示偏好。模式控制明暗；主题控制强调色与对话界面样式。',
       colorMode: '颜色模式',
-      colorModeDesc: '选择固定模式，或让 Hermes 跟随系统设置。',
+      colorModeDesc: '选择固定模式，或让 One Person Lab 跟随系统设置。',
       toolViewTitle: '工具调用显示',
       toolViewDesc: '产品模式隐藏原始工具数据；技术模式显示完整输入/输出。',
       translucencyTitle: '窗口透明',
@@ -596,7 +596,7 @@ export const zh: Translations = {
       }
     }),
     about: {
-      heading: 'One Person Lab Hermes Candidate',
+      heading: 'One Person Lab',
       version: value => `版本 ${value}`,
       versionUnavailable: '版本不可用',
       updates: '更新',
@@ -665,7 +665,7 @@ export const zh: Translations = {
       title: '网关连接',
       envOverride: '环境变量覆盖',
       intro:
-        'Hermes Desktop 默认会启动自己的本地网关。当你希望此应用控制另一台机器上或可信代理后的现有 Hermes 后端时，可以使用远程网关。下面可按 profile 指定各自的远程主机。',
+        'One Person Lab 默认会启动自己的本地网关。只有当你希望此应用控制另一台机器上或可信代理后的现有后端时，才需要使用远程网关。下面可按 profile 指定各自的远程主机。',
       appliesTo: '应用于',
       allProfiles: '所有 profile',
       defaultConnection: '默认连接会用于所有没有自定义覆盖的 profile。',
@@ -673,10 +673,10 @@ export const zh: Translations = {
       envOverrideTitle: '环境变量正在控制此桌面会话。',
       envOverrideDesc: '取消设置 HERMES_DESKTOP_REMOTE_URL 和 HERMES_DESKTOP_REMOTE_TOKEN 后才会使用下面保存的设置。',
       localTitle: '本地网关',
-      localDesc: '在 localhost 启动私有 Hermes 后端。这是默认方式，并且可离线工作。',
+      localDesc: '在 localhost 启动私有本地后端。这是默认方式，并且可离线工作。',
       remoteTitle: '远程网关',
       remoteDesc:
-        '将此桌面外壳连接到远程 Hermes 后端。托管网关使用 OAuth 或用户名密码；自托管网关也可能使用会话 token。',
+        '将此桌面外壳连接到远程后端。托管网关使用 OAuth 或用户名密码；自托管网关也可能使用会话 token。',
       remoteUrlTitle: '远程 URL',
       remoteUrlDesc: '远程 dashboard 后端的基础 URL。支持路径前缀，例如 /hermes。',
       probing: '正在检查此网关的认证方式…',
@@ -709,9 +709,9 @@ export const zh: Translations = {
       enterUrlFirst: '请先输入远程 URL。',
       restartingTitle: '网关连接正在重启',
       savedTitle: '网关设置已保存',
-      restartingMessage: 'Hermes Desktop 将使用已保存设置重新连接。',
+      restartingMessage: 'One Person Lab 将使用已保存设置重新连接。',
       savedMessage: '已保存，下一次重启生效。',
-      connectedTo: (baseUrl, version) => `已连接到 ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
+      connectedTo: (baseUrl, version) => `已连接到 ${baseUrl}${version ? ` · 后端 ${version}` : ''}`,
       reachableTitle: '远程网关可访问',
       signedOutTitle: '已退出登录',
       signedOutMessage: '已清除远程网关会话。',
@@ -809,19 +809,25 @@ export const zh: Translations = {
       failedLoad: '智能体与能力加载失败',
       title: '智能体与能力',
       intro:
-        '这些能力由 Codex 的 Skill/Plugin 机制加载和调用。GUI 只提供入口展示与 prompt shortcut，不解析关键词、不预执行 MAS/MAG/RCA 命令，也不创建领域回执。',
+        '这里展示 Codex 当前可调用的 One Person Lab 能力。聊天里输入 /mas、/mag、/rca，或使用 $mas、$mag、$rca 前缀，即可让 Codex 按已安装的 Skill/Plugin 机制接管任务。',
       emptyTitle: '暂无可用 Codex Skill',
       emptyDesc: '当前候选版本没有从 OPL gateway 读到 Codex Skill catalog。',
+      chatInvocation: '聊天调用',
+      execution: '执行方式',
+      executionDesc: '由 Codex 选择并加载对应 Skill/Plugin；GUI 只提供入口，不执行领域命令。',
+      invocationFlow: '输入 /mas 任务 会转换为 $mas 任务 发送给 Codex；/mag 与 /rca 同理。',
       project: '项目',
       invocation: '显式调用',
       codexSkill: 'Codex Skill',
       skillPath: 'Skill 路径',
       ordinaryPath: '常规路径',
       boundary: '权限边界',
+      slashAvailable: '已加入 / 命令面板',
+      missingHint: 'Codex 当前没有发现对应 Skill。请检查本机 Codex Skill/Plugin 安装。',
       skillReady: 'Codex 已发现',
       skillMissing: 'Codex 未发现',
-      skillBoundary: '由 Codex 选择和调用，GUI 不接管领域权威',
-      noDomainTruth: 'GUI 不写领域真相 / 不创建 owner receipt / 不声明 domain ready'
+      skillBoundary: '由 Codex 调用，GUI 不接管领域权威',
+      noDomainTruth: '领域真相、owner receipt 与 domain ready 结论仍归对应 OPL 智能体与仓库'
     },
     sessions: {
       loading: '正在加载已归档会话…',
@@ -975,7 +981,7 @@ export const zh: Translations = {
     },
     nav: {
       newChat: { title: '新建会话', detail: '开始一个新会话' },
-      settings: { title: '设置', detail: '配置 Hermes 桌面端' },
+      settings: { title: '设置', detail: '配置 One Person Lab 桌面端' },
       skills: { title: '技能与工具', detail: '启用技能、工具集与提供方' },
       messaging: { title: '消息平台', detail: '配置 Telegram、Slack、Discord 等' },
       artifacts: { title: '产物', detail: '浏览生成的输出' }
@@ -997,9 +1003,9 @@ export const zh: Translations = {
     noSessions: '暂无会话。',
     gatewayRunning: '消息网关运行中',
     gatewayStopped: '消息网关已停止',
-    hermesActiveSessions: (version, count) => `Hermes ${version} · 活跃会话 ${count}`,
+    hermesActiveSessions: (version, count) => `One Person Lab ${version} · 活跃会话 ${count}`,
     restartMessaging: '重启消息服务',
-    updateHermes: '更新 Hermes',
+    updateHermes: '更新 One Person Lab',
     actionRunning: '运行中',
     actionDone: '完成',
     actionFailed: '失败',
@@ -1655,7 +1661,7 @@ export const zh: Translations = {
     settingUpTitle: '正在初始化 One Person Lab',
     finishingTitle: '正在收尾',
     failedDesc:
-      '某个初始化步骤失败。请查看下面的详情或 desktop 日志中的完整记录；这里不会自动安装 Hermes Agent。',
+      '某个初始化步骤失败。请查看下面的详情或 desktop 日志中的完整记录；这里会准备 One Person Lab，不会安装独立的 Agent runtime。',
     activeDesc:
       '这是一次性本机初始化。One Person Lab 正在检查本机命令行工具和必要组件。模型访问会在初始化后单独配置。',
     progress: (completed, total) => `${completed}/${total} 个步骤已完成`,
@@ -1818,7 +1824,7 @@ export const zh: Translations = {
       update: '更新',
       updateInProgress: '正在更新',
       commitsBehind: (count, branch) => `落后 ${branch} ${count} 个提交`,
-      desktopVersion: version => `Hermes Desktop v${version}`,
+      desktopVersion: version => `One Person Lab v${version}`,
       backendVersion: version => `后端 v${version}`,
       clientLabel: version => `客户端 v${version}`,
       backendLabel: version => `后端 v${version}`,

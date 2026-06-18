@@ -5,11 +5,14 @@ const crypto = require('node:crypto')
 
 const root = path.resolve(__dirname, '..')
 const requireApp = process.argv.includes('--require-app')
+const requireVisualSmoke = process.argv.includes('--require-visual-smoke')
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const mainProcess = read('electron/main.cjs')
 const oplBootstrapRunner = read('electron/opl-bootstrap-runner.cjs')
 const oplCodexGateway = read('electron/opl-codex-gateway.cjs')
 const commandPalette = read('src/app/command-palette/index.tsx')
+const settingsVisualSmoke = read('scripts/smoke-settings-visual.cjs')
+const firstRunSmoke = read('scripts/smoke-opl-first-run.cjs')
 const upstreamSourceRef = '5e01a5dbf1b7bc0144d9057be706da1ea9f065c3'
 
 function assert(condition, message) {
@@ -48,6 +51,11 @@ assert(read('UPSTREAM_README.md').includes('Hermes Agent'), 'upstream README rec
 assert(mainProcess.includes("Resolving Hermes backend"), 'main process must preserve official Hermes backend resolution')
 assert(mainProcess.includes("seedOplHermesDefaults"), 'main process must seed OPL defaults through the official Hermes runtime')
 assert(mainProcess.includes("createOplCodexGateway"), 'main process must start the OPL Codex adapter for the OPL fallback path')
+assert(mainProcess.includes('OPL_HERMES_SMOKE_NO_FOREGROUND'), 'main process must support non-foreground smoke mode')
+assert(mainProcess.includes('if (OPL_SMOKE_NO_FOREGROUND) return'), 'main process must guard show/focus paths during smoke')
+assert(firstRunSmoke.includes("OPL_HERMES_SMOKE_NO_FOREGROUND: '1'"), 'packaged first-run smoke must request non-foreground app launch')
+assert(settingsVisualSmoke.includes('--allow-foreground'), 'Settings visual smoke must require explicit foreground opt-in')
+assert(settingsVisualSmoke.includes('opens/focuses the app to capture screenshots'), 'Settings visual smoke must explain foreground behavior')
 assert(
   mainProcess.includes("OPL_CODEX_CANDIDATE && backend.kind === 'bootstrap-needed'"),
   'OPL candidate must intercept missing Hermes runtime before official Hermes bootstrap'
@@ -96,8 +104,12 @@ assert(oplCodexGateway.includes("providers: []"), 'adapter must report no OAuth 
 assert(oplCodexGateway.includes('onboarding_deferred'), 'adapter must expose user-deferred onboarding status')
 assert(oplCodexGateway.includes("session.create"), 'adapter must implement Hermes session.create RPC')
 assert(oplCodexGateway.includes("prompt.submit"), 'adapter must implement Hermes prompt.submit RPC')
+assert(oplCodexGateway.includes("result: { ok: true, accepted: true }"), 'adapter prompt.submit must acknowledge before the Codex turn completes')
+assert(oplCodexGateway.includes('stripLegacyPurposeRouteReceipt'), 'adapter must strip legacy OPL purpose-route receipts before sending prompts to Codex')
 assert(oplCodexGateway.includes("codex.skills"), 'adapter must expose Codex skill catalog RPC')
 assert(oplCodexGateway.includes("'/api/opl/codex-skills'"), 'adapter must expose Codex skill catalog REST route')
+assert(oplCodexGateway.includes('commands.catalog'), 'adapter must expose OPL Skill slash command catalog')
+assert(oplCodexGateway.includes('complete.slash'), 'adapter must expose OPL Skill slash completions')
 assert(!oplCodexGateway.includes("purpose.route.resolve"), 'adapter must not implement GUI-side purpose route resolve RPC')
 assert(!oplCodexGateway.includes("'/api/opl/purpose-routes'"), 'adapter must not expose legacy purpose route catalog REST route')
 assert(oplCodexGateway.includes("Med Auto Science"), 'adapter must declare the MAS Codex skill shortcut')
@@ -169,6 +181,7 @@ if (requireApp) {
   assert(packagedBootstrap.includes("startup_path: 'user_deferred'"), 'packaged bootstrap runner must support user-deferred first-run setup')
   assert(packagedBootstrap.includes("'app', 'state', '--profile', 'fast', '--json'"), 'packaged bootstrap runner must use fast app state readiness before one-time initialization')
   assert(packagedBootstrap.includes("startup_path: 'lightweight_probe'"), 'packaged bootstrap runner must refresh marker from a successful fast readiness probe')
+  assert(packagedGateway.includes('stripLegacyPurposeRouteReceipt'), 'packaged adapter must strip legacy route receipts')
   assert(packagedGateway.includes("'thread/start'"), 'packaged adapter must include thread/start mapping')
   assert(packagedGateway.includes("'turn/start'"), 'packaged adapter must include turn/start mapping')
   assert(packagedGateway.includes("'item/agentMessage/delta'"), 'packaged adapter must include agent delta mapping')
@@ -180,7 +193,6 @@ if (requireApp) {
   const packagedIconHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(packagedAppRoot, 'assets/icon.png'))).digest('hex')
   const packagedAppleIconHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(packagedAppRoot, 'public/apple-touch-icon.png'))).digest('hex')
   assert(packagedIconHash === packagedAppleIconHash, 'packaged runtime apple-touch-icon.png must match the OPL app icon')
-  const settingsVisualSummaryPath = path.join(root, 'out/smoke-settings-visual/settings-visual-summary.json')
   const firstRunSummaryPath = path.join(root, 'out/smoke-opl-first-run/summary.json')
   assert(fs.existsSync(firstRunSummaryPath), 'packaged first-run smoke summary missing; run npm run smoke:opl-first-run')
   const firstRunSummary = JSON.parse(fs.readFileSync(firstRunSummaryPath, 'utf8'))
@@ -189,7 +201,7 @@ if (requireApp) {
   assert(userDeferred, 'packaged first-run smoke must include user_deferred_first_run case')
   assert(userDeferred.gateway?.skip?.clicked === true, 'packaged first-run smoke must click Skip and enter chat')
   assert(
-    userDeferred.gateway?.skip?.renderer_main_visible_after_skip === true,
+    userDeferred.gateway?.skip?.renderer_main_ready_after_skip === true,
     'packaged first-run smoke must prove the renderer enters the main UI after skip'
   )
   assert(
@@ -208,7 +220,29 @@ if (requireApp) {
     userDeferred.gateway?.status?.backend === 'codex-app-server-adapter',
     'packaged first-run smoke must start the Codex adapter after user-deferred setup'
   )
-  assert(fs.existsSync(settingsVisualSummaryPath), 'packaged Settings visual smoke summary missing; run npm run smoke:settings-visual -- --out out/smoke-settings-visual')
+  const configured = firstRunSummary.cases?.configured_key
+  assert(configured?.chatEvidence?.skill_input_forwarded === true, 'packaged first-run smoke must prove $mas reaches Codex as a structured skill input')
+  assert(configured?.chatEvidence?.prompt_submit_long_turn_immediate_ack === true, 'packaged first-run smoke must prove long prompt.submit gets an immediate ack')
+  assert(Number(configured?.chatEvidence?.prompt_submit_long_turn_ack_ms ?? Infinity) < 3000, 'packaged first-run smoke long prompt.submit ack must be under 3000ms')
+  assert(configured?.chatEvidence?.prompt_submit_long_turn_completed_after_ack === true, 'packaged first-run smoke must prove long turn completion arrives after ack')
+  assert(configured?.chatEvidence?.legacy_route_stripped_packaged === true, 'packaged first-run smoke must prove legacy OPL route wrappers are stripped before Codex')
+  const configuredCodexCalls = configured?.codexCalls || []
+  const longTurn = configuredCodexCalls
+    .filter(call => call.method === 'turn/start')
+    .find(call => call.params?.input?.some(input => input.type === 'text' && String(input.text || '').includes('long turn packaged smoke')))
+  const longPromptText = longTurn?.params?.input?.find(input => input.type === 'text')?.text || ''
+  assert(longTurn, 'packaged first-run smoke must include a long turn prompt sent to Codex')
+  assert(!/OPL purpose route receipt/i.test(longPromptText), 'packaged long turn prompt must not include legacy route receipt')
+  assert(!/route_readback_ready/i.test(longPromptText), 'packaged long turn prompt must not include legacy route status')
+  assert(!/Opl route/i.test(longPromptText), 'packaged long turn prompt must not include legacy Opl route label')
+}
+
+if (requireVisualSmoke) {
+  const settingsVisualSummaryPath = path.join(root, 'out/smoke-settings-visual/settings-visual-summary.json')
+  assert(
+    fs.existsSync(settingsVisualSummaryPath),
+    'packaged Settings visual smoke summary missing; run npm run smoke:settings-visual -- --allow-foreground --out out/smoke-settings-visual in VM/Tart or on an idle machine'
+  )
   const settingsVisualSummary = JSON.parse(fs.readFileSync(settingsVisualSummaryPath, 'utf8'))
   assert(settingsVisualSummary.status === 'opl_hermes_settings_visual_smoke_passed', 'packaged Settings visual smoke must pass')
   assert(settingsVisualSummary.assertions?.home_nonblank === true, 'packaged Settings visual smoke must prove a nonblank home')
@@ -229,4 +263,8 @@ if (requireApp) {
   assert(Number(homeScreenshot?.bytes || 0) > 50_000, `packaged home visual smoke screenshot looks blank or under-rendered: ${homeScreenshot?.path}`)
 }
 
-console.log(JSON.stringify({ status: 'hermes_codex_candidate_valid', require_app: requireApp }, null, 2))
+console.log(JSON.stringify({
+  status: 'hermes_codex_candidate_valid',
+  require_app: requireApp,
+  require_visual_smoke: requireVisualSmoke
+}, null, 2))
