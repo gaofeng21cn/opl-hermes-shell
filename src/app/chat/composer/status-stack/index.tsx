@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'rea
 import { useNavigate } from 'react-router-dom'
 
 import { blurComposerInput } from '@/app/chat/composer/focus'
-import { AGENTS_ROUTE } from '@/app/routes'
+import { SETTINGS_ROUTE } from '@/app/routes'
 import { composerDockCard } from '@/components/chat/composer-dock'
 import { StatusSection } from '@/components/chat/status-section'
 import { Button } from '@/components/ui/button'
@@ -79,7 +79,7 @@ export function ComposerStatusStack({ queue, sessionId }: ComposerStatusStackPro
     return () => clearInterval(timer)
   }, [hasRunningBackground, sessionId])
 
-  const openAgents = () => navigate(AGENTS_ROUTE)
+  const openAgents = () => navigate(`${SETTINGS_ROUTE}?tab=agents`)
 
   const openSubagent = (item: ComposerStatusItem) =>
     item.sessionId ? void openSessionInNewWindow(item.sessionId, { watch: true }) : openAgents()

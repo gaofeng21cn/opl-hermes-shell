@@ -72,6 +72,7 @@ export interface Translations {
       backgroundExitedDuringStartup: string
       backendStopped: string
       desktopBootFailed: string
+      gatewayReconnectFailed: string
       gatewaySignInRequired: string
       ipcBridgeUnavailable: string
     }
@@ -424,6 +425,9 @@ export interface Translations {
       removeFailed: string
       gatewayUnavailableTitle: string
       gatewayUnavailableMessage: string
+      diagnosticTitle: string
+      diagnosticDesc: string
+      openDiagnostics: string
       reloadedTitle: string
       reloadedMessage: string
       reloadFailed: string
@@ -649,10 +653,10 @@ export interface Translations {
     settingsFields: string
     mcpServers: string
     archivedChats: string
-    sections: Record<'sessions' | 'system' | 'usage', string>
-    sectionDescriptions: Record<'sessions' | 'system' | 'usage', string>
+    sections: Record<'sessions' | 'system', string>
+    sectionDescriptions: Record<'sessions' | 'system', string>
     nav: Record<'newChat' | 'settings' | 'skills' | 'messaging' | 'artifacts', { title: string; detail: string }>
-    sectionEntries: Record<'sessions' | 'system' | 'usage', { title: string; detail: string }>
+    sectionEntries: Record<'sessions' | 'system', { title: string; detail: string }>
     providerNavigate: string
     providerSessions: string
     refresh: string
@@ -666,33 +670,9 @@ export interface Translations {
     gatewayRunning: string
     gatewayStopped: string
     hermesActiveSessions: (version: string, count: number) => string
-    restartMessaging: string
-    updateHermes: string
-    actionRunning: string
-    actionDone: string
-    actionFailed: string
-    actionStartedWaiting: string
     loadingStatus: string
     recentLogs: string
     noLogs: string
-    days: (count: number) => string
-    statSessions: string
-    statApiCalls: string
-    statTokens: string
-    statCost: string
-    actualCost: (cost: string) => string
-    loadingUsage: string
-    noUsage: (period: number) => string
-    retry: string
-    dailyTokens: string
-    input: string
-    output: string
-    noDailyActivity: string
-    topModels: string
-    noModelUsage: string
-    topSkills: string
-    noSkillActivity: string
-    actions: (count: string) => string
   }
 
   messaging: {

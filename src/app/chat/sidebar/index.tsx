@@ -41,15 +41,11 @@ import { useI18n } from '@/i18n'
 import { comboTokens } from '@/lib/keybinds/combo'
 import { profileColor } from '@/lib/profile-color'
 import { sessionMatchesSearch } from '@/lib/session-search'
-import { normalizeSessionSource, sessionSourceLabel } from '@/lib/session-source'
 import { cn } from '@/lib/utils'
-import { $cronJobs } from '@/store/cron'
 import {
   $panesFlipped,
   $pinnedSessionIds,
   $sidebarAgentsGrouped,
-  $sidebarCronOpen,
-  $sidebarMessagingOpenIds,
   $sidebarOpen,
   $sidebarOverlayMounted,
   $sidebarPinsOpen,
@@ -62,7 +58,6 @@ import {
   SESSION_SEARCH_FOCUS_EVENT,
   setPinnedSessionOrder,
   setSidebarAgentsGrouped,
-  setSidebarCronOpen,
   setSidebarPinsOpen,
   setSidebarRecentsOpen,
   setSidebarSessionOrderIds,
@@ -70,7 +65,6 @@ import {
   setSidebarWorkspaceOrderIds,
   setSidebarWorkspaceParentOrderIds,
   SIDEBAR_SESSIONS_PAGE_SIZE,
-  toggleSidebarMessagingOpen,
   unpinSession
 } from '@/store/layout'
 import {
@@ -83,9 +77,6 @@ import {
 } from '@/store/profile'
 import {
   $cronSessions,
-  $messagingPlatformTotals,
-  $messagingSessions,
-  $messagingTruncated,
   $selectedStoredSessionId,
   $sessionProfileTotals,
   $sessions,
@@ -95,11 +86,10 @@ import {
   sessionPinId
 } from '@/store/session'
 
-import { type AppView, ARTIFACTS_ROUTE, MESSAGING_ROUTE, SKILLS_ROUTE } from '../../routes'
+import { type AppView } from '../../routes'
 import { SidebarPanelLabel } from '../../shell/sidebar-label'
 import type { SidebarNavItem } from '../../types'
 
-import { SidebarCronJobsSection } from './cron-jobs-section'
 import { SidebarLoadMoreRow } from './load-more-row'
 import { resolveManualSessionOrderIds } from './order'
 import { ProfileRail } from './profile-switcher'
@@ -108,12 +98,6 @@ import { VirtualSessionList } from './virtual-session-list'
 import { type SidebarSessionGroup, type SidebarWorkspaceTree, workspaceTreeFor } from './workspace-groups'
 
 const VIRTUALIZE_THRESHOLD = 25
-
-// Non-session groups (messaging platforms) stay compact: show a few rows up
-// front, reveal more in larger steps on demand. Keeps a busy platform from
-// dominating the sidebar before the user asks to see it.
-const NON_SESSION_INITIAL_ROWS = 3
-const NON_SESSION_LOAD_STEP = 10
 
 const NEW_SESSION_KBD = comboTokens('mod+n')
 
@@ -124,14 +108,6 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     icon: props => <Codicon name="robot" {...props} />,
     action: 'new-session'
   },
-  {
-    id: 'skills',
-    label: '',
-    icon: props => <Codicon name="symbol-misc" {...props} />,
-    route: SKILLS_ROUTE
-  },
-  { id: 'messaging', label: '', icon: props => <Codicon name="comment" {...props} />, route: MESSAGING_ROUTE },
-  { id: 'artifacts', label: '', icon: props => <Codicon name="files" {...props} />, route: ARTIFACTS_ROUTE }
 ]
 
 const WORKSPACE_PAGE = 5
@@ -302,13 +278,10 @@ interface ChatSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onNavigate: (item: SidebarNavItem) => void
   onLoadMoreSessions: () => void
   onLoadMoreProfileSessions?: (profile: string) => Promise<void> | void
-  onLoadMoreMessaging?: (platform: string) => Promise<void> | void
   onResumeSession: (sessionId: string) => void
   onDeleteSession: (sessionId: string) => void
   onArchiveSession: (sessionId: string) => void
   onNewSessionInWorkspace: (path: null | string) => void
-  onManageCronJob: (jobId: string) => void
-  onTriggerCronJob: (jobId: string) => void
 }
 
 export function ChatSidebar({
@@ -316,13 +289,10 @@ export function ChatSidebar({
   onNavigate,
   onLoadMoreSessions,
   onLoadMoreProfileSessions,
-  onLoadMoreMessaging,
   onResumeSession,
   onDeleteSession,
   onArchiveSession,
-  onNewSessionInWorkspace,
-  onManageCronJob,
-  onTriggerCronJob
+  onNewSessionInWorkspace
 }: ChatSidebarProps) {
   const { t } = useI18n()
   const s = t.sidebar
@@ -335,14 +305,9 @@ export function ChatSidebar({
   const pinnedSessionIds = useStore($pinnedSessionIds)
   const pinsOpen = useStore($sidebarPinsOpen)
   const agentsOpen = useStore($sidebarRecentsOpen)
-  const cronOpen = useStore($sidebarCronOpen)
   const selectedSessionId = useStore($selectedStoredSessionId)
   const sessions = useStore($sessions)
   const cronSessions = useStore($cronSessions)
-  const cronJobs = useStore($cronJobs)
-  const messagingSessions = useStore($messagingSessions)
-  const messagingPlatformTotals = useStore($messagingPlatformTotals)
-  const messagingTruncated = useStore($messagingTruncated)
   const sessionsLoading = useStore($sessionsLoading)
   const sessionsTotal = useStore($sessionsTotal)
   const sessionProfileTotals = useStore($sessionProfileTotals)
@@ -364,10 +329,6 @@ export function ChatSidebar({
   const [serverMatches, setServerMatches] = useState<SessionSearchResult[]>([])
   const [newSessionKbdFlash, setNewSessionKbdFlash] = useState(false)
   const [profileLoadMorePending, setProfileLoadMorePending] = useState<Record<string, boolean>>({})
-  const [messagingLoadMorePending, setMessagingLoadMorePending] = useState<Record<string, boolean>>({})
-  const messagingOpenIds = useStore($sidebarMessagingOpenIds)
-  // Per-platform count of rows currently revealed (starts at NON_SESSION_INITIAL_ROWS).
-  const [messagingVisible, setMessagingVisible] = useState<Record<string, number>>({})
   const searchInputRef = useRef<HTMLInputElement>(null)
   const trimmedQuery = searchQuery.trim()
 
@@ -585,76 +546,6 @@ export function ChatSidebar({
     },
     [onLoadMoreProfileSessions]
   )
-
-  const loadMoreForMessaging = useCallback(
-    (platform: string) => {
-      if (!onLoadMoreMessaging) {
-        return
-      }
-
-      setMessagingLoadMorePending(prev => ({ ...prev, [platform]: true }))
-
-      void Promise.resolve(onLoadMoreMessaging(platform))
-        .catch(() => undefined)
-        .finally(() => setMessagingLoadMorePending(({ [platform]: _done, ...rest }) => rest))
-    },
-    [onLoadMoreMessaging]
-  )
-
-  // Reveal another batch of a platform's rows; fetch from the backend too if we
-  // run past what's loaded and more remain on disk.
-  const revealMoreMessaging = (platform: string, loaded: number, hasMore: boolean) => {
-    const next = (messagingVisible[platform] ?? NON_SESSION_INITIAL_ROWS) + NON_SESSION_LOAD_STEP
-
-    setMessagingVisible(prev => ({ ...prev, [platform]: next }))
-
-    if (next > loaded && hasMore) {
-      loadMoreForMessaging(platform)
-    }
-  }
-
-  // Each messaging platform is its own self-managed section: split the
-  // separately-fetched messaging slice by source, newest platform first, rows
-  // within a platform by recency. Per-platform totals (when a "load more" has
-  // resolved them) drive the count + whether more remain on disk.
-  const messagingGroups = useMemo<MessagingSection[]>(() => {
-    if (!messagingSessions.length) {
-      return []
-    }
-
-    const bySource = new Map<string, SessionInfo[]>()
-
-    for (const session of messagingSessions) {
-      const sourceId = normalizeSessionSource(session.source)
-
-      if (!sourceId) {
-        continue
-      }
-
-      const list = bySource.get(sourceId) ?? []
-      list.push(session)
-      bySource.set(sourceId, list)
-    }
-
-    return [...bySource.entries()]
-      .map(([sourceId, list]) => {
-        const ordered = [...list].sort((a, b) => sessionTime(b) - sessionTime(a))
-        const known = messagingPlatformTotals[sourceId]
-        const total = Math.max(ordered.length, known ?? 0)
-
-        return {
-          // Known exact total → more exist iff total exceeds loaded; otherwise
-          // the seed fetch was capped, so assume more until a per-platform load
-          // resolves the count.
-          hasMore: known != null ? known > ordered.length : messagingTruncated,
-          label: sessionSourceLabel(sourceId) ?? sourceId,
-          sessions: ordered,
-          sourceId,
-          total
-        }
-      })
-      .sort((a, b) => sessionTime(b.sessions[0]) - sessionTime(a.sessions[0]))
-  }, [messagingSessions, messagingPlatformTotals, messagingTruncated])
 
   // ALL-profiles view: one collapsible group per profile, color on the header
   // (not on every row). Default profile floats to the top, the rest alpha.
@@ -1016,63 +907,6 @@ export function ChatSidebar({
               />
             )}
 
-            {!trimmedQuery &&
-              messagingGroups.map(group => {
-                const visible = messagingVisible[group.sourceId] ?? NON_SESSION_INITIAL_ROWS
-                const shownSessions = group.sessions.slice(0, visible)
-                // More to show if rows are hidden behind the cap, or the backend
-                // still has older threads on disk.
-                const canRevealMore = visible < group.sessions.length || group.hasMore
-
-                return (
-                  <SidebarSessionsSection
-                    activeSessionId={activeSidebarSessionId}
-                    contentClassName={cn('flex max-h-56 flex-col gap-px pb-1.75', GROUP_BODY)}
-                    emptyState={null}
-                    footer={
-                      canRevealMore ? (
-                        <SidebarLoadMoreRow
-                          loading={Boolean(messagingLoadMorePending[group.sourceId])}
-                          onClick={() => revealMoreMessaging(group.sourceId, group.sessions.length, group.hasMore)}
-                          step={Math.min(NON_SESSION_LOAD_STEP, Math.max(0, group.total - shownSessions.length))}
-                        />
-                      ) : null
-                    }
-                    key={group.sourceId}
-                    label={group.label}
-                    labelIcon={
-                      <PlatformAvatar
-                        className="size-4 rounded-[4px] text-[0.5625rem] [&_svg]:size-3"
-                        platformId={group.sourceId}
-                        platformName={group.label}
-                      />
-                    }
-                    labelMeta={countLabel(group.sessions.length, group.total)}
-                    onArchiveSession={onArchiveSession}
-                    onDeleteSession={onDeleteSession}
-                    onResumeSession={onResumeSession}
-                    onToggle={() => toggleSidebarMessagingOpen(group.sourceId)}
-                    onTogglePin={pinSession}
-                    open={messagingOpenIds.includes(group.sourceId)}
-                    pinned={false}
-                    rootClassName="shrink-0 p-0"
-                    sessions={shownSessions}
-                    workingSessionIdSet={workingSessionIdSet}
-                  />
-                )
-              })}
-
-            {!trimmedQuery && cronJobs.length > 0 && (
-              <SidebarCronJobsSection
-                jobs={cronJobs}
-                label={s.cronJobs}
-                onManageJob={onManageCronJob}
-                onOpenRun={onResumeSession}
-                onToggle={() => setSidebarCronOpen(!cronOpen)}
-                onTriggerJob={onTriggerCronJob}
-                open={cronOpen}
-              />
-            )}
           </div>
         )}
 
@@ -1152,14 +986,6 @@ function SidebarPinnedEmptyState() {
       <span>{t.sidebar.shiftClickHint}</span>
     </div>
   )
-}
-
-interface MessagingSection {
-  sourceId: string
-  label: string
-  sessions: SessionInfo[]
-  total: number
-  hasMore: boolean
 }
 
 interface SidebarSessionsSectionProps {

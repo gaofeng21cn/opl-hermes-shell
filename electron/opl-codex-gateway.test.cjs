@@ -136,6 +136,22 @@ async function openGatewaySocket(wsUrl) {
   return socket
 }
 
+function waitForFrame(frames, predicate, label, timeoutMs = 2000) {
+  return new Promise((resolve, reject) => {
+    const started = Date.now()
+    const timer = setInterval(() => {
+      const frame = frames.find(predicate)
+      if (frame) {
+        clearInterval(timer)
+        resolve(frame)
+      } else if (Date.now() - started > timeoutMs) {
+        clearInterval(timer)
+        reject(new Error(`timeout waiting for ${label}`))
+      }
+    }, 20)
+  })
+}
+
 test('OPL Codex gateway returns renderer-safe startup REST shapes', async () => {
   await withGateway(async descriptor => {
     const models = await getJson(descriptor.baseUrl, '/api/model/options')
@@ -265,6 +281,7 @@ test('OPL Codex gateway scope helper documents executor bridge ownership', () =>
   assert.equal(isOplCodexBridgeRpcMethod('prompt.submit'), true)
   assert.equal(isOplCodexBridgeRpcMethod('config.get'), true)
   assert.equal(isOplCodexBridgeRpcMethod('config.set'), true)
+  assert.equal(isOplCodexBridgeRpcMethod('reload.mcp'), true)
   assert.equal(isOplCodexBridgeRpcMethod('codex.skills'), true)
   assert.equal(isOplCodexBridgeRpcMethod('purpose.route.resolve'), false)
   assert.equal(isOplCodexBridgeRpcMethod('commands.catalog'), true)
@@ -317,6 +334,18 @@ test('OPL Codex gateway returns renderer-safe official UI bootstrap REST shapes'
     const cron = await requestJson(descriptor.baseUrl, '/api/cron/jobs')
     assert.equal(cron.response.status, 200)
     assert.deepEqual(cron.body, [])
+
+    const createCron = await requestJson(descriptor.baseUrl, '/api/cron/jobs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'misleading cron job' })
+    })
+    assert.equal(createCron.response.status, 501)
+    assert.equal(createCron.body.error, 'opl_codex_bridge_not_full_backend')
+
+    const triggerCron = await requestJson(descriptor.baseUrl, '/api/cron/jobs/example/trigger', { method: 'POST' })
+    assert.equal(triggerCron.response.status, 501)
+    assert.equal(triggerCron.body.error, 'opl_codex_bridge_not_full_backend')
   })
 })
 
@@ -408,10 +437,49 @@ test('OPL Codex gateway exposes a minimal slash catalog for OPL Codex Skills', a
 test('OPL Codex gateway refuses unsupported official Hermes backend RPC methods instead of returning empty success', async () => {
   await withGateway(async descriptor => {
     await assert.rejects(
-      () => requestRpc(descriptor.wsUrl, 'complete.path', { prefix: '/tmp' }),
+      () => requestRpc(descriptor.wsUrl, 'handoff.request', { target: 'slack' }),
       /opl_codex_bridge_not_full_backend|Hermes backend owns this route/
     )
   })
+})
+
+test('OPL Codex gateway implements safe local path completion for composer context suggestions', async () => {
+  await withGateway(async descriptor => {
+    const prefix = __filename.slice(0, -'opl-codex-gateway.test.cjs'.length) + 'opl-codex'
+    const result = await requestRpc(descriptor.wsUrl, 'complete.path', { prefix, cwd: __dirname })
+
+    assert.equal(Array.isArray(result.items), true)
+    assert.equal(
+      result.items.some(item => String(item.path).endsWith('opl-codex-gateway.cjs')),
+      true
+    )
+    assert.equal(result.bridge_mode, 'codex_app_server_skill_first_adapter')
+  })
+})
+
+test('OPL Codex gateway closes adapter sessions without pretending to delete a full Hermes profile session', async () => {
+  const abortedThreads = []
+  const appServerClient = {
+    abortTurn: async threadId => {
+      abortedThreads.push(threadId)
+    },
+    listSkills: async () => ({ data: [] }),
+    startThread: async () => ({ thread: { id: 'thread-close' } }),
+    stop: () => undefined
+  }
+
+  await withGateway(async descriptor => {
+    const created = await requestRpc(descriptor.wsUrl, 'session.create', { title: 'temporary' })
+    const closed = await requestRpc(descriptor.wsUrl, 'session.close', { session_id: created.session_id })
+
+    assert.equal(closed.ok, true)
+    assert.equal(closed.closed, true)
+    assert.deepEqual(abortedThreads, ['thread-close'])
+
+    const closedAgain = await requestRpc(descriptor.wsUrl, 'session.close', { session_id: created.session_id })
+    assert.equal(closedAgain.ok, true)
+    assert.equal(closedAgain.closed, false)
+  }, { appServerClient })
 })
 
 test('OPL Codex gateway returns renderer-safe config RPC shapes', async () => {
@@ -437,6 +505,32 @@ test('OPL Codex gateway returns renderer-safe config RPC shapes', async () => {
       value: 'gpt-5.5 --provider gflab --global'
     })
     assert.equal(explicit.model, 'gpt-5.5')
+  })
+})
+
+test('OPL Codex gateway handles MCP reload as adapter diagnostics instead of full backend ownership', async () => {
+  await withGateway(async descriptor => {
+    const updated = await requestJson(descriptor.baseUrl, '/api/config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        config: {
+          mcp_servers: {
+            filesystem: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem'] }
+          }
+        }
+      })
+    })
+    assert.equal(updated.response.status, 200)
+
+    const result = await requestRpc(descriptor.wsUrl, 'reload.mcp', { confirm: true })
+    assert.equal(result.ok, true)
+    assert.equal(result.status, 'adapter_diagnostic_only')
+    assert.equal(result.bridge_mode, 'codex_app_server_skill_first_adapter')
+    assert.equal(result.route_owner, 'codex')
+    assert.equal(result.server_count, 1)
+    assert.deepEqual(result.servers, ['filesystem'])
+    assert.equal(result.applies_to, 'fresh_codex_turns_or_sessions')
   })
 })
 
@@ -733,23 +827,13 @@ test('OPL Codex gateway acknowledges prompt.submit before a long Codex turn comp
       })
 
       assert.deepEqual(submit, { ok: true, accepted: true })
-      assert.equal(frames.some(frame => frame.params?.type === 'message.delta'), true)
+      assert.equal(frames.some(frame => frame.params?.type === 'message.complete'), false)
+      await waitForFrame(frames, frame => frame.params?.type === 'message.delta', 'long message.delta')
       assert.equal(frames.some(frame => frame.params?.type === 'message.complete'), false)
 
       resolveTurn()
 
-      await new Promise((resolve, reject) => {
-        const started = Date.now()
-        const timer = setInterval(() => {
-          if (frames.some(frame => frame.params?.type === 'message.complete')) {
-            clearInterval(timer)
-            resolve()
-          } else if (Date.now() - started > 2000) {
-            clearInterval(timer)
-            reject(new Error('timeout waiting for long message.complete'))
-          }
-        }, 20)
-      })
+      await waitForFrame(frames, frame => frame.params?.type === 'message.complete', 'long message.complete')
 
       socket.close()
     },

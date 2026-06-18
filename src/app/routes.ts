@@ -8,6 +8,14 @@ export const ARTIFACTS_ROUTE = '/artifacts'
 export const CRON_ROUTE = '/cron'
 export const PROFILES_ROUTE = '/profiles'
 export const AGENTS_ROUTE = '/agents'
+export const HIDDEN_FULL_HERMES_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
+  [SKILLS_ROUTE]: `${SETTINGS_ROUTE}?tab=agents`,
+  [MESSAGING_ROUTE]: COMMAND_CENTER_ROUTE,
+  [ARTIFACTS_ROUTE]: COMMAND_CENTER_ROUTE,
+  [CRON_ROUTE]: `${COMMAND_CENTER_ROUTE}?section=system`,
+  [PROFILES_ROUTE]: SETTINGS_ROUTE,
+  [AGENTS_ROUTE]: `${SETTINGS_ROUTE}?tab=agents`
+}
 
 export type AppView =
   | 'agents'
@@ -41,12 +49,6 @@ export const APP_ROUTES = [
   { id: 'new', path: NEW_CHAT_ROUTE, view: 'chat' },
   { id: 'settings', path: SETTINGS_ROUTE, view: 'settings' },
   { id: 'command-center', path: COMMAND_CENTER_ROUTE, view: 'command-center' },
-  { id: 'skills', path: SKILLS_ROUTE, view: 'skills' },
-  { id: 'messaging', path: MESSAGING_ROUTE, view: 'messaging' },
-  { id: 'artifacts', path: ARTIFACTS_ROUTE, view: 'artifacts' },
-  { id: 'cron', path: CRON_ROUTE, view: 'cron' },
-  { id: 'profiles', path: PROFILES_ROUTE, view: 'profiles' },
-  { id: 'agents', path: AGENTS_ROUTE, view: 'agents' }
 ] as const satisfies readonly AppRoute[]
 
 const APP_VIEW_BY_PATH = new Map<string, AppView>(APP_ROUTES.map(route => [route.path, route.view]))
@@ -55,7 +57,7 @@ const RESERVED_PATHS: ReadonlySet<string> = new Set(APP_ROUTES.map(route => rout
 // Views that render as a full-screen modal card (OverlayView) over the shell.
 // While one is open the app's titlebar control clusters must hide so they don't
 // bleed over the overlay (they sit at a higher z-index than the overlay card).
-export const OVERLAY_VIEWS: ReadonlySet<AppView> = new Set(['agents', 'command-center', 'cron', 'profiles', 'settings'])
+export const OVERLAY_VIEWS: ReadonlySet<AppView> = new Set(['command-center', 'settings'])
 
 export function isOverlayView(view: AppView): boolean {
   return OVERLAY_VIEWS.has(view)
@@ -85,4 +87,8 @@ export function appViewForPath(pathname: string): AppView {
   }
 
   return APP_VIEW_BY_PATH.get(pathname) ?? 'chat'
+}
+
+export function redirectForHiddenFullHermesRoute(pathname: string): string | null {
+  return HIDDEN_FULL_HERMES_ROUTE_REDIRECTS[pathname] ?? null
 }

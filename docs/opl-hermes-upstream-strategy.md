@@ -67,11 +67,13 @@ OPL 路线的默认策略是：
 
 - 保留 Hermes Desktop 原生交互和视觉结构作为初始基线。
 - 先做 OPL 品牌化、App identity、图标和候选包名。
-- 后端入口先保留 Hermes Agent/Hermes Desktop 官方 backend contract，保证设置、
-  skills、toolsets、MCP、profiles、cron、文件/预览、会话和 first-launch bootstrap
-  可用。Codex app-server-backed Hermes gateway adapter 只做 thin client；
-  MAS/MAG/RCA 通过 Codex Skill/Plugin/MCP 能力进入 Codex，由 Codex 作为顶层协调器判断是否调用，而不是替换整个
-  `/api/*` 和 WebSocket backend。
+- 后端入口以 Phase 1 compatibility firewall 处理：与 Codex App-like OPL 普通路径
+  一致的能力补 adapter；只适合排障的能力进入 Advanced/Diagnostics；会误导用户以为
+  有完整 Hermes backend 的 skills、toolsets、profiles、cron mutation、messaging、
+  provider marketplace、update/restart、audio/media remote helper 和 raw MCP manager
+  不作为普通可用功能呈现。Codex app-server-backed Hermes gateway adapter 只做 thin
+  client；MAS/MAG/RCA 通过 Codex Skill/Plugin/MCP 能力进入 Codex，由 Codex 作为顶层
+  协调器判断是否调用，而不是替换整个 `/api/*` 和 WebSocket backend。
 - 隐藏、降级或重命名 OPL 普通用户不需要的 provider/backend/agent runtime 概念。
 - 对 OPL 必需能力做最小薄适配：Codex Skill shortcuts、App-owned settings、
   runtime refs、page-state 和 first-run 等都必须先经过 App repo contract gate。
@@ -89,10 +91,12 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   manifest；`public/apple-touch-icon.png` 必须与 OPL 图标同步，因为 Electron
   启动后会用它刷新运行时 Dock icon。Home intro 的 wordmark 也属于 branding：
   普通首屏必须显示 `One Person Lab`，不能继续显示 upstream `HERMES AGENT`。
-- **Official backend preservation**：`electron/main.cjs` 保留官方 Hermes backend
+- **Official backend comparison**：`electron/main.cjs` 保留官方 Hermes backend
   resolution、first-launch bootstrap、remote backend、profile pool 和
-  `hermes dashboard` API contract。候选包启动后必须先是一个功能完整的 Hermes
-  Desktop。
+  `hermes dashboard` API contract，作为 upstream 对比与后续 intake 基线。候选包在
+  OPL fallback / Codex app-server adapter 模式下不声称自己是功能完整的 Hermes
+  backend；普通路径只开放已分类为 `implement` 或 `adapt` 的能力，其余进入
+  `diagnostic_only` 或 `hide_or_remove`。
 - **OPL defaults seed**：`electron/opl-defaults.cjs` 在官方 Hermes runtime resolved
   后、`hermes dashboard` 启动前，用官方 `hermes_cli.config.load_config/save_config`
   只补缺省值：`model.openai_runtime=codex_app_server`、`display.language=zh` 和
@@ -138,8 +142,9 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   `validate:candidate -- --require-app` 的隐含要求。
 
 这些改动可以作为长期 OPL delta 存在，但应保持薄、可比较、可撤回。凡是让官方
-Hermes 设置页、skills、toolsets、MCP、profiles 或 cron 变空的改动，都默认不是
-合格的第一层定制。
+Hermes 设置页、skills、toolsets、MCP、profiles 或 cron 暗示普通可管理但背后没有
+真实 backend owner 的改动，都不是合格的第一层定制。Phase 1 宁可隐藏或下沉诊断，
+也不能用空列表、假成功 mutation 或 no-op reload 掩盖缺口。
 
 ## 设置页空态归因规则
 
@@ -175,8 +180,9 @@ Hermes Desktop 官方设置页导航包含 `Model`、`Chat`、`Appearance`、`Wo
 当前 OPL fallback adapter 的责任是让官方 renderer 的基础设置交互可用：补齐上述
 config schema、provider env catalog 和 adapter 生命周期内的 config save/readback。
 它仍不是完整 Hermes backend replacement；skills、toolsets、messaging、analytics、
-正式 persisted sessions、OAuth provider accounts、update runtime 等深层能力继续由
-官方 Hermes backend 或后续经过 App repo adoption gate 的 OPL bridge 承接。
+正式 persisted sessions、OAuth provider accounts、update runtime、cron scheduler 等
+深层能力继续由官方 Hermes backend 或后续经过 App repo adoption gate 的 OPL bridge
+承接。进入 ordinary UI 前必须有真实实现和验证；否则只能作为诊断 readback 或隐藏。
 
 ## 必须先对比再接入的面
 

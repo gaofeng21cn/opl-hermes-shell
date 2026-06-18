@@ -141,7 +141,7 @@ describe('ModelSettings', () => {
     await renderModelSettings()
 
     expect(await screen.findByText('Vision')).toBeTruthy()
-    expect(screen.getAllByText('auto · use main model').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('auto · follow main model').length).toBeGreaterThan(0)
   })
 
   it('assigns an auxiliary task to the main model via setModelAssignment', async () => {

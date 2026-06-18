@@ -5,7 +5,7 @@ import { Tip } from '@/components/ui/tooltip'
 import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { Archive, Bell, Brain, Info, Wrench, Zap } from '@/lib/icons'
+import { Archive, Bell, Brain, Info, Zap } from '@/lib/icons'
 import { notifyError } from '@/store/notifications'
 
 import { useRouteEnumParam } from '../hooks/use-route-enum-param'
@@ -105,12 +105,6 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
             icon={Brain}
             label={t.settings.nav.agentsCapabilities}
             onClick={() => setActiveView('agents')}
-          />
-          <OverlayNavItem
-            active={activeView === 'mcp'}
-            icon={Wrench}
-            label={t.settings.nav.mcp}
-            onClick={() => setActiveView('mcp')}
           />
           <OverlayNavItem
             active={activeView === 'sessions'}

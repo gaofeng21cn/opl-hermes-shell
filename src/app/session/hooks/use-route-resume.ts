@@ -1,6 +1,6 @@
 import { type MutableRefObject, useEffect, useRef } from 'react'
 
-import { isNewChatRoute } from '@/app/routes'
+import { isNewChatRoute, redirectForHiddenFullHermesRoute } from '@/app/routes'
 
 interface RouteResumeOptions {
   activeSessionId: string | null
@@ -32,12 +32,7 @@ function rawHashLooksLikeSession(): boolean {
     return false
   }
 
-  return (
-    !hash.startsWith('/settings') &&
-    !hash.startsWith('/skills') &&
-    !hash.startsWith('/messaging') &&
-    !hash.startsWith('/artifacts')
-  )
+  return !hash.startsWith('/settings') && !hash.startsWith('/command-center') && !redirectForHiddenFullHermesRoute(hash)
 }
 
 export function useRouteResume({

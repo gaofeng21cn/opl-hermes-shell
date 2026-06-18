@@ -42,16 +42,7 @@ import { useTheme } from '@/themes/context'
 
 import { requestComposerFocus } from '../chat/composer/focus'
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from '../layout-constants'
-import {
-  AGENTS_ROUTE,
-  ARTIFACTS_ROUTE,
-  CRON_ROUTE,
-  MESSAGING_ROUTE,
-  PROFILES_ROUTE,
-  sessionRoute,
-  SETTINGS_ROUTE,
-  SKILLS_ROUTE
-} from '../routes'
+import { COMMAND_CENTER_ROUTE, sessionRoute, SETTINGS_ROUTE } from '../routes'
 
 export interface KeybindRuntimeDeps {
   /** Open/close the command center overlay (sessions / system / usage). */
@@ -118,12 +109,12 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     'nav.commandPalette': toggleCommandPalette,
     'nav.commandCenter': deps.toggleCommandCenter,
     'nav.settings': () => navigate(SETTINGS_ROUTE),
-    'nav.profiles': () => navigate(PROFILES_ROUTE),
-    'nav.skills': () => navigate(SKILLS_ROUTE),
-    'nav.messaging': () => navigate(MESSAGING_ROUTE),
-    'nav.artifacts': () => navigate(ARTIFACTS_ROUTE),
-    'nav.cron': () => navigate(CRON_ROUTE),
-    'nav.agents': () => navigate(AGENTS_ROUTE),
+    'nav.profiles': () => navigate(SETTINGS_ROUTE),
+    'nav.skills': () => navigate(`${SETTINGS_ROUTE}?tab=agents`),
+    'nav.messaging': () => navigate(COMMAND_CENTER_ROUTE),
+    'nav.artifacts': () => navigate(COMMAND_CENTER_ROUTE),
+    'nav.cron': () => navigate(`${COMMAND_CENTER_ROUTE}?section=system`),
+    'nav.agents': () => navigate(`${SETTINGS_ROUTE}?tab=agents`),
 
     'session.new': () => {
       // Match the sidebar New Session button. A plain keyboard new chat should

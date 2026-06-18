@@ -531,7 +531,6 @@ const BRIDGE_REST_ROUTES = [
   { method: 'GET', path: '/api/config/defaults' },
   { method: 'GET', path: '/api/config/schema' },
   { method: 'GET', path: '/api/cron/jobs' },
-  { method: 'POST', path: '/api/cron/jobs' },
   { method: 'GET', path: '/api/env' },
   { method: 'PUT', path: '/api/env' },
   { method: 'DELETE', path: '/api/env' },
@@ -554,14 +553,17 @@ const BRIDGE_RPC_METHODS = [
   'session.usage',
   'session.title',
   'session.cwd.set',
+  'session.close',
   'config.get',
   'config.set',
+  'reload.mcp',
   'setup.status',
   'setup.runtime_check',
   'codex.skills',
   'model.options',
   'commands.catalog',
   'complete.slash',
+  'complete.path',
   'file.attach',
   'image.attach',
   'image.attach_bytes'
@@ -579,8 +581,8 @@ function routeKey(method, pathname) {
 }
 
 function isOplCodexBridgeRestRoute(method, pathname) {
-  if (/^\/api\/cron\/jobs\/[^/]+(?:\/(?:runs|pause|resume|trigger))?$/.test(String(pathname || ''))) {
-    return ['GET', 'PUT', 'POST', 'DELETE'].includes(normalizeMethod(method))
+  if (/^\/api\/cron\/jobs\/[^/]+(?:\/runs)?$/.test(String(pathname || ''))) {
+    return normalizeMethod(method) === 'GET'
   }
   return BRIDGE_REST_ROUTE_KEYS.has(routeKey(method, pathname))
 }
@@ -658,6 +660,51 @@ function codexSkillSlashCompletions(text) {
     items: query ? items.filter(item => item.text.slice(1).startsWith(query)) : items,
     replace_from: 1
   }
+}
+
+function pathCompletionBase(prefix, cwd) {
+  const rawPrefix = String(prefix || '')
+  const baseCwd = cwd || process.env.OPL_HERMES_DEFAULT_CWD || process.env.PWD || process.env.HOME || process.cwd()
+  const expanded =
+    rawPrefix === '~' || rawPrefix.startsWith('~/')
+      ? path.join(process.env.HOME || baseCwd, rawPrefix.slice(2))
+      : rawPrefix
+  const absolute = path.isAbsolute(expanded) ? expanded : path.resolve(baseCwd, expanded || '.')
+  const endsWithSeparator = /[\\/]$/.test(expanded)
+  const directory = endsWithSeparator ? absolute : path.dirname(absolute)
+  const basename = endsWithSeparator ? '' : path.basename(absolute)
+
+  return { absolute, basename, baseCwd, directory }
+}
+
+function codexPathCompletions({ prefix = '', cwd = process.env.OPL_HERMES_DEFAULT_CWD || process.env.PWD || process.cwd() } = {}) {
+  const { basename, directory } = pathCompletionBase(prefix, cwd)
+  let entries = []
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true })
+  } catch {
+    return { items: [], prefix, cwd, bridge_mode: 'codex_app_server_skill_first_adapter' }
+  }
+
+  const needle = basename.toLowerCase()
+  const items = entries
+    .filter(entry => !needle || entry.name.toLowerCase().startsWith(needle))
+    .slice(0, 50)
+    .map(entry => {
+      const fullPath = path.join(directory, entry.name)
+      const isDirectory = entry.isDirectory()
+      return {
+        text: isDirectory ? `${fullPath}${path.sep}` : fullPath,
+        display: isDirectory ? `${entry.name}/` : entry.name,
+        label: isDirectory ? `${entry.name}/` : entry.name,
+        path: fullPath,
+        type: isDirectory ? 'directory' : 'file',
+        kind: isDirectory ? 'directory' : 'file',
+        meta: isDirectory ? 'directory' : 'file'
+      }
+    })
+
+  return { items, prefix, cwd, bridge_mode: 'codex_app_server_skill_first_adapter' }
 }
 
 function describeOplCodexGatewayScope() {
@@ -1954,19 +2001,18 @@ function createOplCodexGateway({
         json(response, 200, [])
         return
       }
-      const body = await readBody(request).catch(() => ({}))
-      json(response, 200, cronJob(`opl-${crypto.createHash('sha1').update(JSON.stringify(body)).digest('hex').slice(0, 8)}`))
+      unsupportedRest(response, request, pathname)
       return
     }
     const cronMatch = pathname.match(/^\/api\/cron\/jobs\/([^/]+)(?:\/(runs|pause|resume|trigger))?$/)
     if (cronMatch) {
+      if (normalizeMethod(request.method) !== 'GET' || cronMatch[2] === 'pause' || cronMatch[2] === 'resume' || cronMatch[2] === 'trigger') {
+        unsupportedRest(response, request, pathname)
+        return
+      }
       const job = cronJob(decodeURIComponent(cronMatch[1]))
       if (cronMatch[2] === 'runs') {
         json(response, 200, { runs: [] })
-        return
-      }
-      if (normalizeMethod(request.method) === 'DELETE') {
-        json(response, 200, { ok: true })
         return
       }
       json(response, 200, job)
@@ -2234,6 +2280,19 @@ function createOplCodexGateway({
         send(socket, { jsonrpc: '2.0', id, result: { cwd, branch: '' } })
         return
       }
+      if (method === 'session.close') {
+        const sessionId = String(params.session_id || '')
+        const session = sessions.get(sessionId)
+        if (session) {
+          if (session.threadId) {
+            getCodexClient(session.cwd).abortTurn(session.threadId).catch(() => undefined)
+          }
+          session.running = false
+          sessions.delete(sessionId)
+        }
+        send(socket, { jsonrpc: '2.0', id, result: { ok: true, closed: Boolean(session), session_id: sessionId } })
+        return
+      }
       if (method === 'config.get') {
         if (params.key === 'project') {
           send(socket, { jsonrpc: '2.0', id, result: projectConfig(params) })
@@ -2256,6 +2315,26 @@ function createOplCodexGateway({
         send(socket, { jsonrpc: '2.0', id, result: { ok: true, ...projectConfig(params), model: configuredModel.model, provider: configuredModel.provider } })
         return
       }
+      if (method === 'reload.mcp') {
+        const servers = currentConfigRecord().mcp_servers || {}
+        const serverNames = isPlainObject(servers) ? Object.keys(servers).sort() : []
+        send(socket, {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            ok: true,
+            status: 'adapter_diagnostic_only',
+            bridge_mode: 'codex_app_server_skill_first_adapter',
+            route_owner: 'codex',
+            server_count: serverNames.length,
+            servers: serverNames,
+            applies_to: 'fresh_codex_turns_or_sessions',
+            message:
+              'MCP config was read by the OPL Hermes Codex adapter. The candidate does not own a full Hermes MCP runtime reload; Codex owns MCP lifecycle for fresh turns or sessions.'
+          }
+        })
+        return
+      }
       if (method === 'setup.status' || method === 'setup.runtime_check') {
         setupSnapshot()
           .then(result => send(socket, { jsonrpc: '2.0', id, result }))
@@ -2274,6 +2353,12 @@ function createOplCodexGateway({
       }
       if (method === 'complete.slash') {
         send(socket, { jsonrpc: '2.0', id, result: codexSkillSlashCompletions(params.text) })
+        return
+      }
+      if (method === 'complete.path') {
+        const prefix = typeof params.prefix === 'string' ? params.prefix : typeof params.text === 'string' ? params.text : ''
+        const cwd = typeof params.cwd === 'string' && params.cwd ? path.resolve(params.cwd) : defaultCwd()
+        send(socket, { jsonrpc: '2.0', id, result: codexPathCompletions({ prefix, cwd }) })
         return
       }
       if (method === 'model.options') {

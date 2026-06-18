@@ -2,9 +2,16 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { type CommandCenterSection } from '@/app/command-center'
-import { AGENTS_ROUTE, appViewForPath, COMMAND_CENTER_ROUTE, isOverlayView, NEW_CHAT_ROUTE } from '@/app/routes'
+import {
+  appViewForPath,
+  COMMAND_CENTER_ROUTE,
+  isOverlayView,
+  NEW_CHAT_ROUTE,
+  redirectForHiddenFullHermesRoute,
+  SETTINGS_ROUTE
+} from '@/app/routes'
 
-const SECTIONS = ['sessions', 'system', 'usage'] as const
+const SECTIONS = ['sessions', 'system'] as const satisfies readonly CommandCenterSection[]
 
 export function useOverlayRouting() {
   const location = useLocation()
@@ -13,11 +20,10 @@ export function useOverlayRouting() {
   const currentView = appViewForPath(location.pathname)
   const settingsOpen = currentView === 'settings'
   const commandCenterOpen = currentView === 'command-center'
-  const agentsOpen = currentView === 'agents'
-  const cronOpen = currentView === 'cron'
-  const profilesOpen = currentView === 'profiles'
+  const agentsOpen = settingsOpen && new URLSearchParams(location.search).get('tab') === 'agents'
   const chatOpen = currentView === 'chat'
   const overlayOpen = isOverlayView(currentView)
+  const hiddenRouteRedirect = redirectForHiddenFullHermesRoute(location.pathname)
 
   // Overlay routes (settings/command-center/agents) stash the underlying path
   // so closing them returns there instead of bouncing to /.
@@ -28,6 +34,12 @@ export function useOverlayRouting() {
       returnPathRef.current = `${location.pathname}${location.search}${location.hash}`
     }
   }, [location.hash, location.pathname, location.search, overlayOpen])
+
+  useEffect(() => {
+    if (hiddenRouteRedirect) {
+      navigate(hiddenRouteRedirect, { replace: true })
+    }
+  }, [hiddenRouteRedirect, navigate])
 
   const commandCenterInitialSection = useMemo<CommandCenterSection | undefined>(
     () => SECTIONS.find(value => value === new URLSearchParams(location.search).get('section')),
@@ -52,7 +64,7 @@ export function useOverlayRouting() {
     }
   }, [closeOverlayToPreviousRoute, commandCenterOpen, navigate])
 
-  const openAgents = useCallback(() => navigate(AGENTS_ROUTE), [navigate])
+  const openAgents = useCallback(() => navigate(`${SETTINGS_ROUTE}?tab=agents`), [navigate])
 
   return {
     agentsOpen,
@@ -60,11 +72,9 @@ export function useOverlayRouting() {
     closeOverlayToPreviousRoute,
     commandCenterInitialSection,
     commandCenterOpen,
-    cronOpen,
     currentView,
     openAgents,
     openCommandCenterSection,
-    profilesOpen,
     settingsOpen,
     toggleCommandCenter
   }

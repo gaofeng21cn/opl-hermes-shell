@@ -52,7 +52,7 @@ import type { ProfileInfo } from '@/types/hermes'
 import { CreateProfileDialog } from '../../profiles/create-profile-dialog'
 import { DeleteProfileDialog } from '../../profiles/delete-profile-dialog'
 import { RenameProfileDialog } from '../../profiles/rename-profile-dialog'
-import { PROFILES_ROUTE } from '../../routes'
+import { SETTINGS_ROUTE } from '../../routes'
 
 const RAIL_GAP = 4 // px — matches gap-1 between squares.
 
@@ -273,7 +273,7 @@ export function ProfileRail() {
           overlay is the only place to edit a profile's SOUL.md, and a
           single-profile user must be able to edit the default's persona
           without first creating a throwaway second profile. */}
-      <ProfilePill active={false} glyph="ellipsis" label={p.manageProfiles} onSelect={() => navigate(PROFILES_ROUTE)} />
+      <ProfilePill active={false} glyph="ellipsis" label={p.manageProfiles} onSelect={() => navigate(SETTINGS_ROUTE)} />
 
       {/* Land in the new profile on a fresh chat (selectProfile triggers the
           new-session reset), not stuck on the session you were just in. */}

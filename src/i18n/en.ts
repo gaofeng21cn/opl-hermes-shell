@@ -57,6 +57,7 @@ export const en: Translations = {
       backgroundExitedDuringStartup: 'One Person Lab background process exited during startup.',
       backendStopped: 'Backend stopped',
       desktopBootFailed: 'Desktop boot failed',
+      gatewayReconnectFailed: 'Lost connection to the One Person Lab gateway and could not reconnect.',
       gatewaySignInRequired: 'Gateway sign-in required',
       ipcBridgeUnavailable: 'Desktop IPC bridge is unavailable.'
     },
@@ -545,14 +546,19 @@ export const en: Translations = {
       removeFailed: 'Remove failed',
       gatewayUnavailableTitle: 'Gateway unavailable',
       gatewayUnavailableMessage: 'Reconnect the gateway before reloading MCP.',
-      reloadedTitle: 'MCP tools reloaded',
-      reloadedMessage: 'New tool schemas apply to fresh turns.',
-      reloadFailed: 'MCP reload failed',
+      diagnosticTitle: 'MCP diagnostics',
+      diagnosticDesc:
+        'Inspect MCP config saved by the candidate adapter. Default chat-first and OPL Skill calls do not require manual MCP management.',
+      openDiagnostics: 'Open diagnostics',
+      reloadedTitle: 'MCP config checked',
+      reloadedMessage:
+        'The candidate adapter read the current MCP config. Codex owns MCP lifecycle for later turns or new sessions.',
+      reloadFailed: 'MCP config check failed',
       savedTitle: 'MCP server saved',
-      savedMessage: name => `${name} applies after MCP reload.`,
+      savedMessage: name => `${name} was saved to the candidate adapter config. Codex can read it for later turns or new sessions.`,
       newServer: 'New server',
-      reload: 'Reload MCP',
-      reloading: 'Reloading...',
+      reload: 'Check MCP config',
+      reloading: 'Checking...',
       emptyTitle: 'No MCP servers',
       emptyDesc:
         'MCP is available when a One Person Lab or Codex workflow needs it. No manual server is required for the default chat-first setup.',
@@ -787,11 +793,10 @@ export const en: Translations = {
     settingsFields: 'Settings fields',
     mcpServers: 'MCP servers',
     archivedChats: 'Archived chats',
-    sections: { sessions: 'Sessions', system: 'System', usage: 'Usage' },
+    sections: { sessions: 'Sessions', system: 'Diagnostics' },
     sectionDescriptions: {
       sessions: 'Search and manage sessions',
-      system: 'Status, logs, and system actions',
-      usage: 'Token, cost, and skill activity over time'
+      system: 'Adapter status and recent logs'
     },
     nav: {
       newChat: { title: 'New session', detail: 'Start a fresh session' },
@@ -802,8 +807,7 @@ export const en: Translations = {
     },
     sectionEntries: {
       sessions: { title: 'Sessions panel', detail: 'Search, pin, and manage sessions' },
-      system: { title: 'System panel', detail: 'Gateway status, logs, restart/update' },
-      usage: { title: 'Usage panel', detail: 'Token, cost, and skill activity' }
+      system: { title: 'Diagnostics panel', detail: 'Gateway status and logs' }
     },
     providerNavigate: 'Navigate',
     providerSessions: 'Sessions',
@@ -815,36 +819,12 @@ export const en: Translations = {
     exportSession: 'Export session',
     deleteSession: 'Delete session',
     noSessions: 'No sessions yet.',
-    gatewayRunning: 'Messaging gateway running',
-    gatewayStopped: 'Messaging gateway stopped',
+    gatewayRunning: 'Codex adapter running',
+    gatewayStopped: 'Codex adapter stopped',
     hermesActiveSessions: (version, count) => `One Person Lab ${version} · Active sessions ${count}`,
-    restartMessaging: 'Restart messaging',
-    updateHermes: 'Update One Person Lab',
-    actionRunning: 'running',
-    actionDone: 'done',
-    actionFailed: 'failed',
-    actionStartedWaiting: 'Action started, waiting for status...',
     loadingStatus: 'Loading status...',
     recentLogs: 'Recent logs',
-    noLogs: 'No logs loaded yet.',
-    days: count => `${count}d`,
-    statSessions: 'Sessions',
-    statApiCalls: 'API calls',
-    statTokens: 'Tokens in/out',
-    statCost: 'Est. cost',
-    actualCost: cost => `actual ${cost}`,
-    loadingUsage: 'Loading usage...',
-    noUsage: period => `No usage in the last ${period} days.`,
-    retry: 'Retry',
-    dailyTokens: 'Daily tokens',
-    input: 'input',
-    output: 'output',
-    noDailyActivity: 'No daily activity.',
-    topModels: 'Top models',
-    noModelUsage: 'No model usage yet.',
-    topSkills: 'Top skills',
-    noSkillActivity: 'No skill activity yet.',
-    actions: count => `${count} actions`
+    noLogs: 'No logs loaded yet.'
   },
 
   messaging: {

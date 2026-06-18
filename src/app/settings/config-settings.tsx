@@ -1,7 +1,8 @@
 import type { ChangeEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 import type { ConfigFieldSchema, HermesConfigRecord } from '@/types/hermes'
 
+import { SETTINGS_ROUTE } from '../routes'
 import { CONTROL_TEXT, EMPTY_SELECT_VALUE, FIELD_DESCRIPTIONS, FIELD_LABELS, SECTIONS } from './constants'
 import { fieldCopyForSchemaKey } from './field-copy'
 import { enumOptionsFor, getNested, prettyName, setNested } from './helpers'
@@ -192,6 +194,7 @@ export function ConfigSettings({
 }) {
   const { t } = useI18n()
   const c = t.settings.config
+  const navigate = useNavigate()
   const [config, setConfig] = useState<HermesConfigRecord | null>(null)
   const [_defaults, setDefaults] = useState<HermesConfigRecord | null>(null)
   const [schema, setSchema] = useState<Record<string, ConfigFieldSchema> | null>(null)
@@ -372,6 +375,19 @@ export function ConfigSettings({
               />
             </div>
           ))}
+        </div>
+      )}
+      {activeSectionId === 'advanced' && (
+        <div className="mt-6 grid gap-1 border-t border-border/40 pt-3">
+          <ListRow
+            action={
+              <Button onClick={() => navigate(`${SETTINGS_ROUTE}?tab=mcp`)} size="sm" variant="textStrong">
+                {t.settings.mcp.openDiagnostics}
+              </Button>
+            }
+            description={t.settings.mcp.diagnosticDesc}
+            title={t.settings.mcp.diagnosticTitle}
+          />
         </div>
       )}
       <input

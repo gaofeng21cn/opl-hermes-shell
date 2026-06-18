@@ -162,7 +162,7 @@ export function McpSettings({ gateway, onConfigSaved }: McpSettingsProps) {
     }
   }
 
-  const reloadMcp = async () => {
+  const checkMcpConfig = async () => {
     if (!gateway) {
       notify({ kind: 'warning', title: m.gatewayUnavailableTitle, message: m.gatewayUnavailableMessage })
 
@@ -190,7 +190,7 @@ export function McpSettings({ gateway, onConfigSaved }: McpSettingsProps) {
         <Button onClick={() => setSelected(null)} size="xs" variant="text">
           {m.newServer}
         </Button>
-        <Button disabled={reloading} onClick={() => void reloadMcp()} size="xs" variant="text">
+        <Button disabled={reloading} onClick={() => void checkMcpConfig()} size="xs" variant="text">
           {reloading ? m.reloading : m.reload}
         </Button>
       </div>

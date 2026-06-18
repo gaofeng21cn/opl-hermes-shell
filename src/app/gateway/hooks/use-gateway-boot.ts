@@ -50,6 +50,8 @@ interface GatewayBootOptions {
   refreshSessions: () => Promise<void>
 }
 
+const RECOVERABLE_RECONNECT_ERROR_ATTEMPTS = 6
+
 export function useGatewayBoot({
   handleGatewayEvent,
   onConnectionReady,
@@ -166,6 +168,15 @@ export function useGatewayBoot({
         if (!cancelled && isGatewayReauthRequired(err) && !reauthNotified) {
           reauthNotified = true
           notifyError(err, translateNow('boot.errors.gatewaySignInRequired'))
+        }
+
+        if (
+          !cancelled &&
+          bootCompleted &&
+          reconnectAttempt >= RECOVERABLE_RECONNECT_ERROR_ATTEMPTS &&
+          !$desktopBoot.get().error
+        ) {
+          failDesktopBoot(translateNow('boot.errors.gatewayReconnectFailed'))
         }
       } finally {
         reconnecting = false

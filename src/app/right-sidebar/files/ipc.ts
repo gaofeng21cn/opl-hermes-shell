@@ -64,11 +64,12 @@ function ancestorDirs(root: string, dir: string) {
 }
 
 async function gitRootFor(start: string) {
-  const key = `${desktopFsCacheKey()}:${clean(start)}`
+  const cleaned = clean(start)
+  const key = `${desktopFsCacheKey()}:${cleaned}`
   let cached = gitRootCache.get(key)
 
   if (!cached) {
-    cached = desktopGitRoot(start)
+    cached = desktopGitRoot(cleaned)
     gitRootCache.set(key, cached)
   }
 

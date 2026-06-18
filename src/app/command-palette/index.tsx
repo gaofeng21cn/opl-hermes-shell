@@ -8,31 +8,26 @@ import { HUD_HEADING, HUD_ITEM, HUD_POSITION, HUD_SURFACE, HUD_TEXT } from '@/ap
 import { setTerminalTakeover } from '@/app/right-sidebar/store'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { KbdCombo } from '@/components/ui/kbd'
-import { getHermesConfigRecord, listAllProfileSessions } from '@/hermes'
+import { listAllProfileSessions } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'
 import {
   Activity,
   Archive,
-  BarChart3,
   Brain,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  Cpu,
   Download,
   type IconComponent,
   Info,
   MessageCircle,
   Monitor,
   Moon,
-  Package,
   Palette,
   Plus,
   Settings,
   Sun,
   Terminal,
-  Users,
   Wrench,
   Zap
 } from '@/lib/icons'
@@ -43,18 +38,7 @@ import { luminance } from '@/themes/color'
 import { type ThemeMode, useTheme } from '@/themes/context'
 import { isUserTheme, resolveTheme } from '@/themes/user-themes'
 
-import {
-  AGENTS_ROUTE,
-  ARTIFACTS_ROUTE,
-  COMMAND_CENTER_ROUTE,
-  CRON_ROUTE,
-  MESSAGING_ROUTE,
-  NEW_CHAT_ROUTE,
-  PROFILES_ROUTE,
-  sessionRoute,
-  SETTINGS_ROUTE,
-  SKILLS_ROUTE
-} from '../routes'
+import { COMMAND_CENTER_ROUTE, NEW_CHAT_ROUTE, sessionRoute, SETTINGS_ROUTE } from '../routes'
 import { FIELD_LABELS, SECTIONS } from '../settings/constants'
 import { fieldCopyForSchemaKey } from '../settings/field-copy'
 import { prettyName } from '../settings/helpers'
@@ -132,7 +116,6 @@ type NonConfigSettingsLabel =
   | 'agentsCapabilities'
   | 'about'
   | 'archivedChats'
-  | 'mcp'
   | 'providers'
 
 const NON_CONFIG_SETTINGS: ReadonlyArray<{
@@ -153,7 +136,6 @@ const NON_CONFIG_SETTINGS: ReadonlyArray<{
     labelKey: 'agentsCapabilities',
     tab: 'agents'
   },
-  { icon: Wrench, keywords: ['servers', 'tools'], labelKey: 'mcp', tab: 'mcp' },
   { icon: Archive, keywords: ['history', 'archived'], labelKey: 'archivedChats', tab: 'sessions' },
   { icon: Info, keywords: ['version', 'about'], labelKey: 'about', tab: 'about' }
 ]
@@ -195,12 +177,6 @@ export function CommandPalette() {
 
   // Server-backed sources for the type-to-search groups, fetched lazily while
   // the palette is open. react-query handles caching/dedup/staleness.
-  const configQuery = useQuery({
-    queryKey: ['command-palette', 'config'],
-    queryFn: getHermesConfigRecord,
-    enabled: open
-  })
-
   const sessionsQuery = useQuery({
     queryKey: ['command-palette', 'sessions'],
     queryFn: () => listAllProfileSessions(200, 1, 'exclude'),
@@ -212,14 +188,6 @@ export function CommandPalette() {
     queryFn: () => listAllProfileSessions(200, 0, 'only'),
     enabled: open
   })
-
-  const mcpServers = useMemo(() => {
-    const raw = configQuery.data?.mcp_servers
-
-    return raw && typeof raw === 'object' && !Array.isArray(raw)
-      ? Object.keys(raw as Record<string, unknown>).sort()
-      : []
-  }, [configQuery.data])
 
   const sessions = useMemo(() => (sessionsQuery.data?.sessions ?? []).map(toSessionEntry), [sessionsQuery.data])
   const archivedSessions = useMemo(() => (archivedQuery.data?.sessions ?? []).map(toSessionEntry), [archivedQuery.data])
@@ -284,39 +252,7 @@ export function CommandPalette() {
             id: 'nav-settings',
             label: cc.nav.settings.title,
             run: go(SETTINGS_ROUTE)
-          },
-          {
-            action: 'nav.skills',
-            icon: Wrench,
-            id: 'nav-skills',
-            keywords: ['tools', 'toolsets'],
-            label: cc.nav.skills.title,
-            run: go(SKILLS_ROUTE)
-          },
-          {
-            action: 'nav.messaging',
-            icon: MessageCircle,
-            id: 'nav-messaging',
-            label: cc.nav.messaging.title,
-            run: go(MESSAGING_ROUTE)
-          },
-          {
-            action: 'nav.artifacts',
-            icon: Package,
-            id: 'nav-artifacts',
-            label: cc.nav.artifacts.title,
-            run: go(ARTIFACTS_ROUTE)
-          },
-          {
-            action: 'nav.cron',
-            icon: Clock,
-            id: 'nav-cron',
-            keywords: ['schedule', 'jobs'],
-            label: t.shell.statusbar.cron,
-            run: go(CRON_ROUTE)
-          },
-          { action: 'nav.profiles', icon: Users, id: 'nav-profiles', label: t.profiles.title, run: go(PROFILES_ROUTE) },
-          { action: 'nav.agents', icon: Cpu, id: 'nav-agents', label: t.agents.title, run: go(AGENTS_ROUTE) }
+          }
         ]
       },
       {
@@ -335,13 +271,6 @@ export function CommandPalette() {
             keywords: ['command center', 'system', 'status', 'logs'],
             label: cc.sections.system,
             run: go(`${COMMAND_CENTER_ROUTE}?section=system`)
-          },
-          {
-            icon: BarChart3,
-            id: 'cc-usage',
-            keywords: ['command center', 'usage', 'tokens', 'cost'],
-            label: cc.sections.usage,
-            run: go(`${COMMAND_CENTER_ROUTE}?section=usage`)
           }
         ]
       },
@@ -389,7 +318,7 @@ export function CommandPalette() {
     ]
   }, [go, settingsSectionLabel, t])
 
-  // The long, granular lists (settings fields, API keys, MCP servers, archived
+  // The long, granular lists (settings fields, archived
   // chats) only surface once the user types — otherwise they'd bury the
   // navigation entries on an empty palette.
   const searchGroups = useMemo<PaletteGroup[]>(() => {
@@ -442,19 +371,6 @@ export function CommandPalette() {
 
     result.push({ heading: t.commandCenter.settingsFields, items: fieldItems })
 
-    if (mcpServers.length > 0) {
-      result.push({
-        heading: t.commandCenter.mcpServers,
-        items: mcpServers.map(name => ({
-          icon: Wrench,
-          id: `mcp-${name}`,
-          keywords: ['mcp', 'server', 'tool'],
-          label: name,
-          run: go(`${SETTINGS_ROUTE}?tab=mcp&server=${encodeURIComponent(name)}`)
-        }))
-      })
-    }
-
     if (archivedSessions.length > 0) {
       result.push({
         heading: t.commandCenter.archivedChats,
@@ -469,7 +385,7 @@ export function CommandPalette() {
     }
 
     return result
-  }, [archivedSessions, configFieldLabel, go, mcpServers, search, sessions, settingsSectionLabel, t])
+  }, [archivedSessions, configFieldLabel, go, search, sessions, settingsSectionLabel, t])
 
   const groups = useMemo(() => [...baseGroups, ...searchGroups], [baseGroups, searchGroups])
 

@@ -11,6 +11,9 @@ const mainProcess = read('electron/main.cjs')
 const oplBootstrapRunner = read('electron/opl-bootstrap-runner.cjs')
 const oplCodexGateway = read('electron/opl-codex-gateway.cjs')
 const commandPalette = read('src/app/command-palette/index.tsx')
+const routes = read('src/app/routes.ts')
+const settings = read('src/app/settings/index.tsx')
+const configSettings = read('src/app/settings/config-settings.tsx')
 const settingsVisualSmoke = read('scripts/smoke-settings-visual.cjs')
 const firstRunSmoke = read('scripts/smoke-opl-first-run.cjs')
 const upstreamSourceRef = '5e01a5dbf1b7bc0144d9057be706da1ea9f065c3'
@@ -130,13 +133,26 @@ assert(
   'onboarding must auto-skip the model access form when setup.status already reports configured credentials'
 )
 assert(
-  commandPalette.includes("tab: 'providers'") && commandPalette.includes("tab: 'agents'") && commandPalette.includes("tab: 'mcp'"),
-  'command palette must keep ordinary OPL model access, agents/capabilities, and MCP settings entries'
+  commandPalette.includes("tab: 'providers'") && commandPalette.includes("tab: 'agents'"),
+  'command palette must keep ordinary OPL model access and agents/capabilities settings entries'
 )
+assert(!commandPalette.includes("tab: 'mcp'"), 'command palette must not expose MCP as an ordinary Phase 1 entry')
 assert(!commandPalette.includes("tab: 'gateway'"), 'command palette must not expose the upstream gateway settings entry')
 assert(!commandPalette.includes("tab: 'keys&kview=tools'"), 'command palette must not expose the upstream tools/key settings entry')
 assert(!commandPalette.includes("tab: 'keys&kview=settings'"), 'command palette must not expose the upstream key gateway settings entry')
-assert(read('src/app/settings/index.tsx').includes("'agents'"), 'Settings must expose the OPL agents/capabilities page')
+assert(
+  routes.includes('HIDDEN_FULL_HERMES_ROUTE_REDIRECTS') &&
+    routes.includes('[SKILLS_ROUTE]') &&
+    routes.includes('[MESSAGING_ROUTE]') &&
+    routes.includes('[ARTIFACTS_ROUTE]') &&
+    routes.includes('[CRON_ROUTE]') &&
+    routes.includes('[PROFILES_ROUTE]') &&
+    routes.includes('[AGENTS_ROUTE]'),
+  'routes must redirect hidden full-Hermes pages to supported Phase 1 surfaces'
+)
+assert(settings.includes("'agents'"), 'Settings must expose the OPL agents/capabilities page')
+assert(settings.includes("'mcp'"), 'Settings must keep MCP as a diagnostic deep link target')
+assert(configSettings.includes('tab=mcp'), 'Advanced Settings must deep-link to MCP diagnostics instead of ordinary palette navigation')
 assert(fs.existsSync(path.join(root, 'src/app/settings/agents-capabilities-settings.tsx')), 'candidate must include the OPL agents/capabilities settings page')
 assert(read('src/app/index.tsx').includes("DesktopController"), 'candidate must reuse official Hermes Desktop app shell')
 assert(read('src/main.tsx').includes("HashRouter"), 'candidate must keep official renderer entry')

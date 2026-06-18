@@ -8,7 +8,6 @@ import { useI18n } from '@/i18n'
 import {
   Activity,
   AlertCircle,
-  Clock,
   Command,
   Hash,
   Loader2,
@@ -45,7 +44,6 @@ import {
 } from '@/store/updates'
 import type { StatusResponse } from '@/types/hermes'
 
-import { CRON_ROUTE } from '../../routes'
 import type { StatusbarItem, StatusbarSelectModifiers } from '../statusbar-controls'
 
 interface StatusbarItemsOptions {
@@ -332,16 +330,8 @@ export function useStatusbarItems({
           ),
         id: 'agents',
         label: copy.agents,
-        onSelect: openAgents,
-        title: agentsOpen ? copy.closeAgents : copy.openAgents,
-        variant: 'action'
-      },
-      {
-        icon: <Clock className="size-3" />,
-        id: 'cron',
-        label: copy.cron,
-        title: copy.openCron,
-        to: CRON_ROUTE,
+        onSelect: () => openCommandCenterSection('system'),
+        title: copy.openCommandCenter,
         variant: 'action'
       }
     ],
@@ -356,7 +346,7 @@ export function useStatusbarItems({
       gatewayDetail,
       inferenceReady,
       inferenceStatus?.reason,
-      openAgents,
+      openCommandCenterSection,
       subagentsRunning,
       toggleCommandCenter
     ]

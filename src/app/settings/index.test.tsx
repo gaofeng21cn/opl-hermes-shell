@@ -38,12 +38,27 @@ describe('SettingsView OPL shape', () => {
     expect(screen.getByRole('button', { name: '模型策略' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '模型访问' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '智能体与能力' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'MCP' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'MCP' })).toBeNull()
     expect(screen.getByRole('button', { name: '关于' })).toBeTruthy()
 
     expect(screen.queryByRole('button', { name: '连接诊断' })).toBeNull()
     expect(screen.queryByRole('button', { name: '工具与密钥' })).toBeNull()
     expect(screen.queryByRole('button', { name: '工具' })).toBeNull()
     expect(screen.queryByRole('button', { name: '设置' })).toBeNull()
+  })
+
+  it('keeps MCP available only as a deep-linked diagnostics surface', async () => {
+    const { SettingsView } = await import('./index')
+
+    render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <MemoryRouter initialEntries={['/settings?tab=mcp']}>
+          <SettingsView onClose={() => undefined} />
+        </MemoryRouter>
+      </I18nProvider>
+    )
+
+    expect(screen.getByText('MCP panel')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'MCP' })).toBeNull()
   })
 })

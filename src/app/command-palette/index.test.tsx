@@ -9,7 +9,7 @@ import { closeCommandPalette, openCommandPalette } from '@/store/command-palette
 import { CommandPalette } from './index'
 
 vi.mock('@/hermes', () => ({
-  getHermesConfigRecord: vi.fn().mockResolvedValue({ mcp_servers: {} }),
+  getHermesConfigRecord: vi.fn().mockResolvedValue({ mcp_servers: { filesystem: { command: 'npx' } } }),
   listAllProfileSessions: vi.fn().mockResolvedValue({ sessions: [] })
 }))
 
@@ -83,17 +83,24 @@ describe('CommandPalette OPL settings shape', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy()
     expect(screen.getByText('Model Access')).toBeTruthy()
     expect(screen.getByText('Agents & Capabilities')).toBeTruthy()
-    expect(screen.getByText('MCP')).toBeTruthy()
+    expect(screen.queryByText('MCP')).toBeNull()
     expect(screen.getByText('Archived Chats')).toBeTruthy()
     expect(screen.getByText('About')).toBeTruthy()
 
     expect(screen.queryByText('Connection diagnostics')).toBeNull()
     expect(screen.queryByText('Tools & Keys')).toBeNull()
+    expect(screen.queryByText('Skills')).toBeNull()
+    expect(screen.queryByText('Messaging')).toBeNull()
+    expect(screen.queryByText('Artifacts')).toBeNull()
+    expect(screen.queryByText('Scheduled jobs')).toBeNull()
+    expect(screen.queryByText('Profiles')).toBeNull()
+    expect(screen.queryByText('Agents')).toBeNull()
 
     fireEvent.change(screen.getByPlaceholderText('Search sessions, views, and actions'), {
       target: { value: 'gateway' }
     })
 
     expect(screen.queryByText('Connection diagnostics')).toBeNull()
+    expect(screen.queryByText('filesystem')).toBeNull()
   })
 })
