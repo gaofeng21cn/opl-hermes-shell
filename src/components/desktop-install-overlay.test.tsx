@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
@@ -111,5 +111,29 @@ describe('DesktopInstallOverlay', () => {
     expect(screen.getByText('安排后台维护')).toBeTruthy()
     expect(screen.queryByText(/Opl initialize/i)).toBeNull()
     expect(screen.queryByText(/gflabtoken access/i)).toBeNull()
+  })
+
+  it('offers a Chinese skip-to-chat action during OPL first-run preparation', async () => {
+    const cancelBootstrap = vi.fn().mockResolvedValue({ cancelled: true, ok: true })
+    ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = {
+      cancelBootstrap,
+      getBootstrapState: vi.fn().mockResolvedValue(activeBootstrapState),
+      onBootstrapEvent: vi.fn(() => () => undefined)
+    }
+
+    render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <DesktopInstallOverlay />
+      </I18nProvider>
+    )
+
+    const skip = await screen.findByRole('button', { name: '跳过并进入对话' })
+    expect(screen.getByText(/Codex 已可用/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '取消初始化' })).toBeNull()
+
+    fireEvent.click(skip)
+
+    await waitFor(() => expect(cancelBootstrap).toHaveBeenCalledTimes(1))
+    expect(await screen.findByRole('button', { name: '正在进入...' })).toBeTruthy()
   })
 })

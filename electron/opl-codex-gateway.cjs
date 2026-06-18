@@ -1240,20 +1240,26 @@ function createOplCodexGateway({
   async function setupSnapshot() {
     try {
       if (!cachedInitialize && cachedSetup) {
+        const onboardingDeferred = cachedSetup.userDeferred === true || cachedSetup.startupMode === 'user_deferred'
         const providerConfigured = cachedSetup.needsApiKey === false
+        const ready = providerConfigured || onboardingDeferred
         return {
-          ok: providerConfigured,
-          ready: providerConfigured,
+          ok: ready,
+          ready,
           launch_ready: true,
           provider_configured: providerConfigured,
+          model_access_configured: !onboardingDeferred && cachedSetup.needsApiKey === false,
+          onboarding_deferred: onboardingDeferred,
           provider: 'gflab',
           model: configuredModel.model,
           reasoning_effort: configuredModel.reasoning_effort,
           base_url: configuredModel.base_url,
           config_path: null,
           startup_mode: cachedSetup.startupMode || null,
-          message: providerConfigured
-            ? 'OPL Codex model access is configured.'
+          message: ready
+            ? onboardingDeferred
+              ? 'One Person Lab preparation was skipped; configure model access from Settings when needed.'
+              : 'OPL Codex model access is configured.'
             : 'Paste an API key to configure OPL Codex model access.'
         }
       }
@@ -1277,6 +1283,8 @@ function createOplCodexGateway({
         ready: launchReady && providerConfigured,
         launch_ready: launchReady,
         provider_configured: providerConfigured,
+        model_access_configured: providerConfigured,
+        onboarding_deferred: false,
         provider: 'gflab',
         model,
         reasoning_effort: reasoningEffort,
@@ -1293,6 +1301,8 @@ function createOplCodexGateway({
         ready: false,
         launch_ready: false,
         provider_configured: false,
+        model_access_configured: false,
+        onboarding_deferred: false,
         provider: 'gflab',
         error: message,
         message
@@ -1914,8 +1924,8 @@ function createOplCodexGateway({
           category: 'provider',
           description: 'gflabtoken API key used by One Person Lab model access.',
           is_password: true,
-          is_set: Boolean(setup.provider_configured),
-          redacted_value: setup.provider_configured ? '••••••••' : null,
+          is_set: Boolean(setup.model_access_configured ?? setup.provider_configured),
+          redacted_value: (setup.model_access_configured ?? setup.provider_configured) ? '••••••••' : null,
           tools: ['codex'],
           url: null
         }

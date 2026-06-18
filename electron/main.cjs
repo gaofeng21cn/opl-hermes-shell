@@ -26,7 +26,7 @@ const { pathToFileURL } = require('node:url')
 const { execFileSync, spawn } = require('node:child_process')
 const { detectRemoteDisplay, isWindowsBinaryPathInWsl, isWslEnvironment } = require('./bootstrap-platform.cjs')
 const { runBootstrap } = require('./bootstrap-runner.cjs')
-const { runOplBootstrap, runOplMaintenanceStages } = require('./opl-bootstrap-runner.cjs')
+const { buildUserDeferredBootstrap, runOplBootstrap, runOplMaintenanceStages } = require('./opl-bootstrap-runner.cjs')
 const { removeOplStartupMarker } = require('./opl-startup-marker.cjs')
 const { createOplCodexGateway } = require('./opl-codex-gateway.cjs')
 const {
@@ -1026,6 +1026,11 @@ function broadcastBootstrapEvent(ev) {
       bootstrapState.log.splice(0, bootstrapState.log.length - BOOTSTRAP_LOG_RING_MAX)
     }
   } else if (ev.type === 'complete') {
+    bootstrapState.active = false
+    bootstrapState.completedAt = Date.now()
+    bootstrapState.error = null
+    bootstrapState.unsupportedPlatform = null
+  } else if (ev.type === 'deferred') {
     bootstrapState.active = false
     bootstrapState.completedAt = Date.now()
     bootstrapState.error = null
@@ -2512,11 +2517,21 @@ async function ensureRuntime(backend) {
     bootstrapAbortController = null
 
     if (result.cancelled) {
-      const cancelledError = new Error('OPL initialization was cancelled.')
-      cancelledError.isBootstrapFailure = true
-      cancelledError.bootstrapCancelled = true
-      bootstrapFailure = cancelledError
-      throw cancelledError
+      const deferred = buildUserDeferredBootstrap({ markerPath: OPL_STARTUP_MARKER_PATH })
+      rememberLog('[opl-bootstrap] user skipped first-run preparation; starting Codex adapter and deferring OPL maintenance')
+      broadcastBootstrapEvent({
+        type: 'deferred',
+        reason: 'user_skipped_first_run_preparation',
+        marker: deferred.marker
+      })
+      return {
+        kind: 'opl-codex-gateway',
+        label: 'OPL Codex app-server adapter',
+        bootstrap: false,
+        oplCodexGateway: true,
+        oplInitialize: null,
+        oplBootstrap: deferred
+      }
     }
 
     if (!result.ok) {

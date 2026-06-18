@@ -374,6 +374,32 @@ function requiredCoreMissing(requiredCorePaths = []) {
   return missing
 }
 
+function buildUserDeferredBootstrap({ markerPath = null, writeMarker = writeOplStartupMarker } = {}) {
+  const payload = {
+    startup_path: 'user_deferred',
+    marker_reason: 'user_skipped_first_run_preparation',
+    ready_to_launch: true,
+    api_key_present: false,
+    maintenance_deferred: true,
+    user_deferred: true
+  }
+  const marker = writeMarker(markerPath, payload) || {
+    kind: 'opl-hermes-candidate-startup',
+    schemaVersion: 1,
+    ...payload,
+    completedAt: new Date().toISOString()
+  }
+  return {
+    ok: true,
+    cancelled: true,
+    userDeferred: true,
+    needsApiKey: true,
+    maintenanceDeferred: true,
+    startupMode: 'user_deferred',
+    marker
+  }
+}
+
 function classifyStartupMarker({ markerPath, requiredCorePaths }) {
   const marker = readOplStartupMarker(markerPath)
   const markerStatus = validateOplStartupMarker(marker)
@@ -674,7 +700,8 @@ async function runOplBootstrap(opts = {}) {
 
     const startupMarker = classifyStartupMarker({ markerPath, requiredCorePaths })
     if (!startupMarker.needsInitialize) {
-      const needsApiKey = startupMarker.marker?.api_key_present === false
+      const userDeferred = startupMarker.marker?.user_deferred === true
+      const needsApiKey = userDeferred || startupMarker.marker?.api_key_present === false
       emitStage(emit, 'opl-initialize', 'skipped', {
         reason: 'OPL startup marker is current; full status refresh runs in the background.'
       })
@@ -684,7 +711,7 @@ async function runOplBootstrap(opts = {}) {
       emitStage(emit, 'opl-post-setup-check', 'skipped', {
         reason: 'No one-time setup changes required.'
       })
-      if (needsApiKey) {
+      if (needsApiKey && !userDeferred) {
         emit({
           type: 'route',
           route: 'model-access',
@@ -706,8 +733,9 @@ async function runOplBootstrap(opts = {}) {
         initialize: null,
         marker,
         needsApiKey,
+        userDeferred,
         maintenanceDeferred: true,
-        startupMode: 'lightweight'
+        startupMode: userDeferred ? 'user_deferred' : 'lightweight'
       }
     }
 
@@ -897,6 +925,7 @@ async function runOplBootstrap(opts = {}) {
 module.exports = {
   apiKeyPresent,
   blockingItems,
+  buildUserDeferredBootstrap,
   codexConfigItem,
   getSystemInitialize,
   getSetupFlow,

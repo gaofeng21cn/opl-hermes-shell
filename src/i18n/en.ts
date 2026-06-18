@@ -1484,8 +1484,11 @@ export const en: Translations = {
     showOutput: 'Show initialization output',
     lines: count => `${count} line${count === 1 ? '' : 's'}`,
     noOutput: 'No output yet.',
-    cancelling: 'Cancelling...',
+    cancelling: 'Continuing...',
     cancelInstall: 'Cancel initialization',
+    skipInstallHint:
+      'If Codex is already available, you can enter chat now. One Person Lab module checks continue later from Settings and diagnostics.',
+    skipToChat: 'Skip and enter chat',
     transcriptSaved: 'Full transcript saved to',
     copiedOutput: 'Copied!',
     copyOutput: 'Copy output',

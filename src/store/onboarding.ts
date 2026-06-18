@@ -183,9 +183,9 @@ function clearPoll() {
 
 async function checkRuntime(ctx: OnboardingContext): Promise<RuntimeReadinessResult> {
   try {
-    const setup = await ctx.requestGateway<{ provider_configured?: boolean }>('setup.status')
+    const setup = await ctx.requestGateway<{ onboarding_deferred?: boolean; provider_configured?: boolean }>('setup.status')
 
-    if (setup?.provider_configured === true) {
+    if (setup?.provider_configured === true || setup?.onboarding_deferred === true) {
       return {
         checksDisagree: false,
         ready: true,

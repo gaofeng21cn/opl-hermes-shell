@@ -1,4 +1,5 @@
 export interface SetupStatusSnapshot {
+  onboarding_deferred?: boolean
   provider_configured?: boolean
 }
 
@@ -86,6 +87,7 @@ export function interpretRuntimeReadiness(
   const defaultReason = options.defaultReason ?? DEFAULT_NOT_READY_REASON
   const unknownReady = options.unknownReady ?? false
 
+  const setupDeferred = signals.setup?.onboarding_deferred === true
   const setupConfigured =
     typeof signals.setup?.provider_configured === 'boolean' ? Boolean(signals.setup.provider_configured) : undefined
 
@@ -95,6 +97,15 @@ export function interpretRuntimeReadiness(
 
   const checksDisagree =
     typeof setupConfigured === 'boolean' && typeof runtimeOk === 'boolean' && setupConfigured !== runtimeOk
+
+  if (setupDeferred) {
+    return {
+      checksDisagree,
+      ready: true,
+      reason: null,
+      source: 'setup_status'
+    }
+  }
 
   if (typeof runtimeOk === 'boolean') {
     if (runtimeOk) {

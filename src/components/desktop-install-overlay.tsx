@@ -516,10 +516,13 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
           </div>
         </div>
 
-        {/* Active footer: let the user actually cancel a running install. */}
+        {/* Active footer: OPL candidate lets the user enter chat and defer slow
+            preparation. Upstream Hermes install semantics still live behind the
+            same IPC when this shell is not running as the OPL candidate. */}
         {state.active && !failed && (
           <div className="flex-shrink-0 bg-card p-4">
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between gap-3">
+              <p className="max-w-md text-xs text-muted-foreground">{copy.skipInstallHint}</p>
               <Button
                 disabled={cancelling}
                 onClick={async () => {
@@ -535,7 +538,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
                 variant="ghost"
               >
                 {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {cancelling ? copy.cancelling : copy.cancelInstall}
+                {cancelling ? copy.cancelling : copy.skipToChat}
               </Button>
             </div>
           </div>

@@ -50,6 +50,22 @@ describe('interpretRuntimeReadiness', () => {
     })
   })
 
+  it('treats deferred onboarding as ready without requiring provider_configured', () => {
+    const result = interpretRuntimeReadiness({
+      setup: { onboarding_deferred: true, provider_configured: false },
+      setupError: null,
+      runtime: { error: 'model access is not configured', ok: false },
+      runtimeError: null
+    })
+
+    expect(result).toEqual({
+      checksDisagree: false,
+      ready: true,
+      reason: null,
+      source: 'setup_status'
+    })
+  })
+
   it('uses explicit fallback when both checks are missing', () => {
     const result = interpretRuntimeReadiness({
       setup: null,

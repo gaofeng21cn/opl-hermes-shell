@@ -7,6 +7,7 @@ const test = require('node:test')
 const {
   apiKeyPresent,
   classifyStartupMarker,
+  buildUserDeferredBootstrap,
   hasOnlyApiKeyBlocker,
   readyToLaunch,
   requiredCoreMissing,
@@ -169,6 +170,29 @@ test('startup marker classifier requires current marker schema and present core 
   }
 })
 
+test('buildUserDeferredBootstrap records a skip marker without pretending model access is configured', () => {
+  const home = mkTmpHome()
+  const markerPath = path.join(home, 'userData', 'opl-startup-marker.json')
+  try {
+    const result = buildUserDeferredBootstrap({ markerPath })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.cancelled, true)
+    assert.equal(result.userDeferred, true)
+    assert.equal(result.needsApiKey, true)
+    assert.equal(result.startupMode, 'user_deferred')
+    assert.equal(result.marker.user_deferred, true)
+    assert.equal(result.marker.ready_to_launch, true)
+    assert.equal(result.marker.api_key_present, false)
+    const marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'))
+    assert.equal(marker.startup_path, 'user_deferred')
+    assert.equal(marker.user_deferred, true)
+    assert.equal(marker.api_key_present, false)
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('runOplBootstrap uses fast app state when marker is missing but OPL is already usable', async () => {
   const home = mkTmpHome()
   const bin = path.join(home, 'bin')
@@ -292,6 +316,38 @@ test('runOplBootstrap uses lightweight startup when OPL marker is current', asyn
     assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-core-setup' && ev.state === 'skipped'))
     assert.equal(events.some(ev => ev.type === 'stage' && ev.name === 'opl-model-access'), false)
     assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-codex-adapter' && ev.state === 'succeeded'))
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('runOplBootstrap honors user-deferred marker as lightweight launch route', async () => {
+  const home = mkTmpHome()
+  const bin = path.join(home, 'bin')
+  const markerPath = path.join(home, 'userData', 'opl-startup-marker.json')
+  const callsFile = path.join(home, 'calls.log')
+  fs.mkdirSync(bin, { recursive: true })
+  writeFixtureOpl(bin, { initialize: [initializePayload({ apiKey: false, blockers: ['codex_config'] })], callsFile })
+  writeFixtureCodex(bin)
+  buildUserDeferredBootstrap({ markerPath })
+
+  const events = []
+  try {
+    const result = await runOplBootstrap({
+      cwd: home,
+      env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH || ''}` },
+      logRoot: path.join(home, 'logs'),
+      markerPath,
+      onEvent: ev => events.push(ev)
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.startupMode, 'user_deferred')
+    assert.equal(result.userDeferred, true)
+    assert.equal(result.needsApiKey, true)
+    assert.deepEqual(readCalls(callsFile), [])
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-initialize' && ev.state === 'skipped'))
+    assert.equal(events.some(ev => ev.type === 'route' && ev.route === 'model-access'), false)
   } finally {
     fs.rmSync(home, { recursive: true, force: true })
   }

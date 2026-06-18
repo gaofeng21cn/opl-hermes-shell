@@ -1119,6 +1119,8 @@ export interface Translations {
     noOutput: string
     cancelling: string
     cancelInstall: string
+    skipInstallHint: string
+    skipToChat: string
     transcriptSaved: string
     copiedOutput: string
     copyOutput: string

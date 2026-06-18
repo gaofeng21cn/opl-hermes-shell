@@ -20,6 +20,7 @@ const artifactsDir = path.resolve(process.env.OPL_HERMES_SMOKE_ARTIFACTS || path
 const summaryPath = path.join(artifactsDir, 'summary.json')
 
 const smokeTimeoutMs = 14_000
+let remoteDebuggingPort = 9421
 
 function fail(message) {
   console.error(message)
@@ -181,10 +182,11 @@ function handle(request) {
 `
 }
 
-function makeFixtureBin(sandbox, apiKeyPresent, codexInstalled = true) {
+function makeFixtureBin(sandbox, apiKeyPresent, codexInstalled = true, options = {}) {
   const binDir = path.join(sandbox, 'bin')
   const callsPath = path.join(sandbox, 'opl-calls.log')
   const codexCallsPath = path.join(sandbox, 'codex-calls.log')
+  const slowInitializeMs = Number(options.slowInitializeMs || 0)
   fs.mkdirSync(binDir, { recursive: true })
   fs.mkdirSync(path.dirname(callsPath), { recursive: true })
   const payload = JSON.stringify(initializePayload(apiKeyPresent))
@@ -194,10 +196,14 @@ const fs = require('node:fs')
 const args = process.argv.slice(2)
 const payload = ${JSON.stringify(payload)}
 const appStatePayload = ${JSON.stringify(appStatePayloadJson)}
+const slowInitializeMs = ${JSON.stringify(slowInitializeMs)}
 fs.appendFileSync(${JSON.stringify(callsPath)}, args.join(' ') + '\\n')
 if (args.join(' ') === 'system initialize --json') {
-  console.log(payload)
-  process.exit(0)
+  setTimeout(() => {
+    console.log(payload)
+    process.exit(0)
+  }, slowInitializeMs)
+  return
 }
 if (args.join(' ') === 'app state --profile fast --json') {
   console.log(appStatePayload)
@@ -245,6 +251,96 @@ async function waitForLog(logPath, predicate) {
 function gatewayPortFromLog(text) {
   const match = text.match(/gateway listening on 127\.0\.0\.1:(\d+)/)
   return match ? Number(match[1]) : null
+}
+
+class Cdp {
+  constructor(ws) {
+    this.ws = ws
+    this.id = 0
+    this.pending = new Map()
+    ws.addEventListener('message', event => {
+      const message = JSON.parse(String(event.data))
+      if (message.id == null || !this.pending.has(message.id)) return
+      const { resolve, reject } = this.pending.get(message.id)
+      this.pending.delete(message.id)
+      if (message.error) reject(new Error(message.error.message || JSON.stringify(message.error)))
+      else resolve(message.result)
+    })
+  }
+
+  static async open(webSocketDebuggerUrl) {
+    const ws = new WebSocket(webSocketDebuggerUrl)
+    await new Promise((resolve, reject) => {
+      ws.addEventListener('open', resolve, { once: true })
+      ws.addEventListener('error', reject, { once: true })
+    })
+    return new Cdp(ws)
+  }
+
+  send(method, params = {}) {
+    const id = ++this.id
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject })
+      this.ws.send(JSON.stringify({ id, method, params }))
+    })
+  }
+
+  async eval(expression) {
+    const result = await this.send('Runtime.evaluate', {
+      awaitPromise: true,
+      expression,
+      returnByValue: true
+    })
+    if (result.exceptionDetails) {
+      throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime.evaluate failed')
+    }
+    return result.result.value
+  }
+
+  close() {
+    this.ws.close()
+  }
+}
+
+async function waitForTarget(port) {
+  const started = Date.now()
+  let lastError = ''
+  let lastTargets = []
+  while (Date.now() - started < smokeTimeoutMs) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/json`)
+      if (response.ok) {
+        const targets = await response.json()
+        lastTargets = targets
+        const pageTargets = targets.filter(entry => {
+          const url = String(entry.url || '')
+          return entry.type === 'page' && entry.webSocketDebuggerUrl && !url.startsWith('devtools://')
+        })
+        const target =
+          pageTargets.find(entry => /(?:dist\/index\.html|127\.0\.0\.1|localhost)/.test(String(entry.url || ''))) ||
+          pageTargets.find(entry => String(entry.url || '') && String(entry.url || '') !== 'about:blank') ||
+          pageTargets[0]
+        if (target) return target
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
+    }
+    await sleep(250)
+  }
+  throw new Error(
+    `Could not find Electron renderer CDP target on ${port}: ${lastError}. Last targets: ${JSON.stringify(lastTargets)}`
+  )
+}
+
+async function waitForCondition(cdp, expression, label) {
+  const started = Date.now()
+  let lastValue = null
+  while (Date.now() - started < smokeTimeoutMs) {
+    lastValue = await cdp.eval(expression)
+    if (lastValue) return lastValue
+    await sleep(250)
+  }
+  throw new Error(`Timed out waiting for ${label}. Last value: ${JSON.stringify(lastValue)}`)
 }
 
 async function getJson(baseUrl, pathname) {
@@ -325,11 +421,13 @@ function stageState(text, stageName) {
 
 async function runLaunch({
   apiKeyPresent,
+  clickSkip = false,
   codexInstalled = true,
   exerciseChat = false,
   exerciseSkillPrompt = false,
   name,
   sandbox,
+  slowInitializeMs = 0,
   expectBlockingInitialize,
   expectRouteToModelAccess
 }) {
@@ -339,7 +437,12 @@ async function runLaunch({
   fs.mkdirSync(userData, { recursive: true })
   fs.mkdirSync(hermesHome, { recursive: true })
   fs.mkdirSync(workspace, { recursive: true })
-  const { binDir, callsPath, codexCallsPath } = makeFixtureBin(path.join(sandbox, `fixture-${name}`), apiKeyPresent, codexInstalled)
+  const { binDir, callsPath, codexCallsPath } = makeFixtureBin(
+    path.join(sandbox, `fixture-${name}`),
+    apiKeyPresent,
+    codexInstalled,
+    { slowInitializeMs }
+  )
   const logPath = path.join(hermesHome, 'logs', 'desktop.log')
   const callsBefore = readCalls(callsPath).length
   const codexCallsBefore = readCalls(codexCallsPath).length
@@ -357,7 +460,12 @@ async function runLaunch({
   delete env.HERMES_DESKTOP_HERMES
   delete env.HERMES_DESKTOP_HERMES_ROOT
 
-  const child = spawn(binary, [], {
+  const childArgs = clickSkip ? [
+    `--remote-debugging-port=${remoteDebuggingPort++}`,
+    '--remote-allow-origins=*'
+  ] : []
+  const debugPort = clickSkip ? Number(childArgs[0].split('=').pop()) : null
+  const child = spawn(binary, childArgs, {
     cwd: workspace,
     env,
     stdio: ['ignore', 'pipe', 'pipe']
@@ -368,9 +476,15 @@ async function runLaunch({
   })
 
   try {
+    const skipEvidence = clickSkip
+      ? await clickSkipToChat({ debugPort, logPath, name })
+      : null
     let text = await waitForLog(logPath, log => (
       log.includes('OPL App initialization instead of Hermes Agent install') &&
-      log.includes('OPL Codex adapter is ready. Finalizing desktop startup')
+      (
+        log.includes('OPL Codex adapter is ready. Finalizing desktop startup') ||
+        log.includes('user skipped first-run preparation; starting Codex adapter')
+      )
     ))
     const port = gatewayPortFromLog(text)
     assert(port, `${name}: gateway port was not logged`)
@@ -379,7 +493,19 @@ async function runLaunch({
     assert(Array.isArray(oauth.providers) && oauth.providers.length === 0, `${name}: OAuth provider route is not renderer-safe empty list`)
     const status = await getJson(baseUrl, '/api/status')
     assert(status.backend === 'codex-app-server-adapter', `${name}: status backend is not Codex app-server adapter`)
-    assert(status.provider_configured === apiKeyPresent, `${name}: provider_configured mismatch`)
+    assert(status.provider_configured === (clickSkip ? false : apiKeyPresent), `${name}: provider_configured mismatch`)
+    const envStatus = await getJson(baseUrl, '/api/env')
+    assert(envStatus.OPENAI_API_KEY, `${name}: /api/env did not expose OPENAI_API_KEY`)
+    assert(
+      envStatus.OPENAI_API_KEY.is_set === (clickSkip ? false : apiKeyPresent),
+      `${name}: /api/env OPENAI_API_KEY.is_set mismatch`
+    )
+    const setupStatus = await readSetupStatus(baseUrl)
+    if (clickSkip) {
+      assert(setupStatus.onboarding_deferred === true, `${name}: setup.status did not report onboarding_deferred`)
+      assert(setupStatus.provider_configured === false, `${name}: setup.status must not claim provider_configured after skip`)
+      assert(skipEvidence?.clicked === true, `${name}: skip button was not clicked through renderer`)
+    }
     const skillCatalog = await getJson(baseUrl, '/api/opl/codex-skills')
     assert(skillCatalog.surface_kind === 'opl_hermes_codex_skill_catalog.v1', `${name}: Codex Skill catalog shape mismatch`)
     assert(skillCatalog.authority_boundary.gui_executes_domain_commands === false, `${name}: GUI must not execute domain commands`)
@@ -483,6 +609,9 @@ async function runLaunch({
     if (apiKeyPresent) {
       assert(text.includes('"maintenance_deferred":true'), `${name}: configured first run did not defer maintenance`)
       assert(!text.includes('API key entry continues in the model access screen'), `${name}: configured first run still routed to API key entry`)
+    } else if (clickSkip) {
+      assert(text.includes('user skipped first-run preparation; starting Codex adapter'), `${name}: user-deferred launch log missing`)
+      assert(!text.includes('[opl-maintenance]'), `${name}: background maintenance started after user-deferred setup`)
     } else {
       assert(
         text.includes('API key entry continues in the model access screen') === expectRouteToModelAccess,
@@ -521,6 +650,11 @@ async function runLaunch({
       sandbox,
       gateway: {
         status,
+        setupStatus,
+        env: {
+          openai_api_key_is_set: envStatus.OPENAI_API_KEY.is_set
+        },
+        skip: skipEvidence,
         codex_skill_count: skillCatalog.skills.length,
         codex_skill_available_count: availableCodexSkills.length,
         codex_skills_available: availableCodexSkills,
@@ -546,6 +680,70 @@ async function runLaunch({
     if (unexpectedStderr && /Error|Exception|Unhandled/i.test(unexpectedStderr)) {
       console.error(`[${name}] stderr:\n${unexpectedStderr}`)
     }
+  }
+}
+
+async function readSetupStatus(baseUrl) {
+  const smokeConnection = await getJson(baseUrl, '/api/smoke/connection')
+  const socket = await openGatewaySocket(smokeConnection.wsUrl)
+  try {
+    return await requestRpcOnSocket(socket, 'setup.status')
+  } finally {
+    socket.close()
+  }
+}
+
+async function clickSkipToChat({ debugPort, logPath, name }) {
+  const target = await waitForTarget(debugPort)
+  const cdp = await Cdp.open(target.webSocketDebuggerUrl)
+  try {
+    await cdp.send('Page.enable')
+    await cdp.send('Runtime.enable')
+    await waitForCondition(
+      cdp,
+      `(() => {
+        const text = document.body?.innerText || ''
+        return text.includes('跳过并进入对话') || text.includes('Skip and enter chat')
+      })()`,
+      `${name} skip button visible`
+    )
+    const clicked = await cdp.eval(`(() => {
+      const buttons = Array.from(document.querySelectorAll('button'))
+      const button = buttons.find(entry => {
+        const text = entry.innerText || entry.getAttribute('aria-label') || ''
+        return text.includes('跳过并进入对话') || text.includes('Skip and enter chat')
+      })
+      if (!(button instanceof HTMLButtonElement)) return false
+      button.click()
+      return true
+    })()`)
+    assert(clicked === true, `${name}: skip button click failed`)
+    const text = await waitForLog(
+      logPath,
+      log => log.includes('user skipped first-run preparation; starting Codex adapter') &&
+        log.includes('gateway listening on 127.0.0.1:'),
+      `${name} deferred gateway readiness`
+    )
+    await waitForCondition(
+      cdp,
+      `(() => {
+        const text = document.body?.innerText || ''
+        return text.length > 20 &&
+          !text.includes('跳过并进入对话') &&
+          !text.includes('Skip and enter chat') &&
+          !text.includes('正在启动 One Person Lab') &&
+          !text.includes('Starting One Person Lab')
+      })()`,
+      `${name} main UI after skip`
+    )
+    return {
+      clicked: true,
+      renderer_main_visible_after_skip: true,
+      deferred_log_seen: true,
+      gateway_port: gatewayPortFromLog(text)
+    }
+  } finally {
+    cdp.close()
   }
 }
 
@@ -600,6 +798,7 @@ async function main() {
   const missingSandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-missing-key-'))
   const configuredSandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-configured-key-'))
   const fallbackSandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-fallback-'))
+  const deferredSandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'opl-hermes-user-deferred-'))
   const missing = await runLaunch({
     apiKeyPresent: false,
     expectBlockingInitialize: false,
@@ -638,6 +837,16 @@ async function main() {
     name: 'fast-probe-not-ready-first-run',
     sandbox: fallbackSandbox
   })
+  const userDeferred = await runLaunch({
+    apiKeyPresent: false,
+    clickSkip: true,
+    codexInstalled: false,
+    expectBlockingInitialize: true,
+    expectRouteToModelAccess: false,
+    name: 'user-deferred-first-run',
+    sandbox: deferredSandbox,
+    slowInitializeMs: smokeTimeoutMs
+  })
 
   const summary = {
     status: 'opl_hermes_packaged_first_run_smoke_passed',
@@ -649,7 +858,8 @@ async function main() {
       missing_key_hot_launch: missingHot,
       configured_key: configured,
       configured_key_hot_launch: configuredHot,
-      fast_probe_not_ready_first_run: fallbackInitialize
+      fast_probe_not_ready_first_run: fallbackInitialize,
+      user_deferred_first_run: userDeferred
     }
   }
   fs.writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`)

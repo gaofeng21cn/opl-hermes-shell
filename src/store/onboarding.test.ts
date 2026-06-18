@@ -195,6 +195,33 @@ describe('refreshOnboarding', () => {
     expect($desktopOnboarding.get().configured).toBe(true)
     expect($desktopOnboarding.get().reason).toBeNull()
   })
+
+  it('dismisses first-run onboarding when setup.status reports a user-deferred launch', async () => {
+    const calls: string[] = []
+    const onCompleted = vi.fn()
+    const ready = await refreshOnboarding({
+      onCompleted,
+      requestGateway: async method => {
+        calls.push(method)
+
+        if (method === 'setup.status') {
+          return { onboarding_deferred: true, provider_configured: false } as never
+        }
+
+        if (method === 'setup.runtime_check') {
+          throw new Error('setup.runtime_check should not block user-deferred launch')
+        }
+
+        throw new Error(`unexpected gateway method: ${method}`)
+      }
+    })
+
+    expect(ready).toBe(true)
+    expect(onCompleted).toHaveBeenCalledTimes(1)
+    expect(calls).toEqual(['setup.status'])
+    expect($desktopOnboarding.get().configured).toBe(true)
+    expect($desktopOnboarding.get().reason).toBeNull()
+  })
 })
 
 describe('OAuth onboarding', () => {

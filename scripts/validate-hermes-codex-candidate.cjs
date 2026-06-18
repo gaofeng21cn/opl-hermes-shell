@@ -66,8 +66,11 @@ assert(JSON.stringify(pkg.scripts || {}).includes('smoke:settings-visual'), 'pac
 assert(oplBootstrapRunner.includes("require('./opl-startup-marker.cjs')"), 'OPL bootstrap runner must use the OPL startup marker')
 assert(oplBootstrapRunner.includes('classifyStartupMarker'), 'OPL bootstrap runner must classify startup marker before full initialize')
 assert(oplBootstrapRunner.includes("startupMode: 'lightweight'"), 'OPL bootstrap runner must support lightweight startup')
+assert(oplBootstrapRunner.includes('buildUserDeferredBootstrap'), 'OPL bootstrap runner must support user-deferred first-run setup')
+assert(oplBootstrapRunner.includes("startupMode: 'user_deferred'"), 'OPL bootstrap runner must persist user-deferred first-run setup')
 assert(oplBootstrapRunner.includes("'app', 'state', '--profile', 'fast', '--json'"), 'OPL bootstrap runner must use fast app state readiness before one-time initialization')
 assert(oplBootstrapRunner.includes("startup_path: 'lightweight_probe'"), 'OPL bootstrap runner must refresh marker from a successful fast readiness probe')
+assert(oplBootstrapRunner.includes("startup_path: 'user_deferred'"), 'OPL bootstrap runner must mark skipped setup as user_deferred')
 assert(oplBootstrapRunner.includes("'system', 'initialize', '--json'"), 'OPL bootstrap runner must call opl system initialize --json')
 assert(oplBootstrapRunner.includes("'install', '--skip-gui-open', '--skip-modules', '--skip-native-helper-repair', '--json'"), 'OPL bootstrap runner must run OPL core install without opening GUI')
 assert(oplBootstrapRunner.includes("'system', 'startup-maintenance', '--json'"), 'OPL bootstrap runner must run startup maintenance when configured')
@@ -90,6 +93,7 @@ assert(oplCodexGateway.includes("'/api/profiles'"), 'adapter must provide render
 assert(oplCodexGateway.includes("'/api/config'"), 'adapter must provide renderer-safe config bootstrap routes')
 assert(oplCodexGateway.includes("'/api/providers/oauth'"), 'adapter must provide renderer-safe OAuth provider bootstrap route')
 assert(oplCodexGateway.includes("providers: []"), 'adapter must report no OAuth providers for the OPL model access path')
+assert(oplCodexGateway.includes('onboarding_deferred'), 'adapter must expose user-deferred onboarding status')
 assert(oplCodexGateway.includes("session.create"), 'adapter must implement Hermes session.create RPC')
 assert(oplCodexGateway.includes("prompt.submit"), 'adapter must implement Hermes prompt.submit RPC')
 assert(oplCodexGateway.includes("codex.skills"), 'adapter must expose Codex skill catalog RPC')
@@ -162,11 +166,13 @@ if (requireApp) {
   }
   assert(packagedGateway.includes("'app-server', '--listen', 'stdio://'"), 'packaged adapter must spawn Codex app-server over stdio')
   assert(packagedBootstrap.includes('classifyStartupMarker'), 'packaged bootstrap runner must support marker-based lightweight startup')
+  assert(packagedBootstrap.includes("startup_path: 'user_deferred'"), 'packaged bootstrap runner must support user-deferred first-run setup')
   assert(packagedBootstrap.includes("'app', 'state', '--profile', 'fast', '--json'"), 'packaged bootstrap runner must use fast app state readiness before one-time initialization')
   assert(packagedBootstrap.includes("startup_path: 'lightweight_probe'"), 'packaged bootstrap runner must refresh marker from a successful fast readiness probe')
   assert(packagedGateway.includes("'thread/start'"), 'packaged adapter must include thread/start mapping')
   assert(packagedGateway.includes("'turn/start'"), 'packaged adapter must include turn/start mapping')
   assert(packagedGateway.includes("'item/agentMessage/delta'"), 'packaged adapter must include agent delta mapping')
+  assert(packagedGateway.includes('onboarding_deferred'), 'packaged adapter must expose user-deferred onboarding status')
   assert(!packagedGateway.includes('exec --json'), 'packaged adapter must not include old codex exec JSON shim')
   const packagedStamp = JSON.parse(fs.readFileSync(path.join(appPath, 'Contents/Resources/install-stamp.json'), 'utf8'))
   assert(packagedStamp.commit === upstreamSourceRef, 'packaged install-stamp.json must use the current upstream source ref')
@@ -175,6 +181,33 @@ if (requireApp) {
   const packagedAppleIconHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(packagedAppRoot, 'public/apple-touch-icon.png'))).digest('hex')
   assert(packagedIconHash === packagedAppleIconHash, 'packaged runtime apple-touch-icon.png must match the OPL app icon')
   const settingsVisualSummaryPath = path.join(root, 'out/smoke-settings-visual/settings-visual-summary.json')
+  const firstRunSummaryPath = path.join(root, 'out/smoke-opl-first-run/summary.json')
+  assert(fs.existsSync(firstRunSummaryPath), 'packaged first-run smoke summary missing; run npm run smoke:opl-first-run')
+  const firstRunSummary = JSON.parse(fs.readFileSync(firstRunSummaryPath, 'utf8'))
+  assert(firstRunSummary.status === 'opl_hermes_packaged_first_run_smoke_passed', 'packaged first-run smoke must pass')
+  const userDeferred = firstRunSummary.cases?.user_deferred_first_run
+  assert(userDeferred, 'packaged first-run smoke must include user_deferred_first_run case')
+  assert(userDeferred.gateway?.skip?.clicked === true, 'packaged first-run smoke must click Skip and enter chat')
+  assert(
+    userDeferred.gateway?.skip?.renderer_main_visible_after_skip === true,
+    'packaged first-run smoke must prove the renderer enters the main UI after skip'
+  )
+  assert(
+    userDeferred.gateway?.setupStatus?.onboarding_deferred === true,
+    'packaged first-run smoke must prove setup.status.onboarding_deferred'
+  )
+  assert(
+    userDeferred.gateway?.setupStatus?.provider_configured === false,
+    'packaged first-run smoke must not mark provider_configured after user-deferred setup'
+  )
+  assert(
+    userDeferred.gateway?.env?.openai_api_key_is_set === false,
+    'packaged first-run smoke must not mark OPENAI_API_KEY as configured after user-deferred setup'
+  )
+  assert(
+    userDeferred.gateway?.status?.backend === 'codex-app-server-adapter',
+    'packaged first-run smoke must start the Codex adapter after user-deferred setup'
+  )
   assert(fs.existsSync(settingsVisualSummaryPath), 'packaged Settings visual smoke summary missing; run npm run smoke:settings-visual -- --out out/smoke-settings-visual')
   const settingsVisualSummary = JSON.parse(fs.readFileSync(settingsVisualSummaryPath, 'utf8'))
   assert(settingsVisualSummary.status === 'opl_hermes_settings_visual_smoke_passed', 'packaged Settings visual smoke must pass')

@@ -204,6 +204,34 @@ test('OPL Codex gateway can answer setup status from lightweight bootstrap state
   )
 })
 
+test('OPL Codex gateway treats user-deferred first run as chat-ready but model access remains unset', async () => {
+  await withGateway(
+    async descriptor => {
+      const status = await getJson(descriptor.baseUrl, '/api/status')
+      assert.equal(status.provider_configured, false)
+      assert.equal(status.status, 'ready')
+
+      const setup = await requestRpc(descriptor.wsUrl, 'setup.status')
+      assert.equal(setup.ready, true)
+      assert.equal(setup.provider_configured, false)
+      assert.equal(setup.model_access_configured, false)
+      assert.equal(setup.onboarding_deferred, true)
+      assert.equal(setup.startup_mode, 'user_deferred')
+
+      const env = await getJson(descriptor.baseUrl, '/api/env')
+      assert.equal(env.OPENAI_API_KEY.is_set, false)
+      assert.equal(env.OPENAI_API_KEY.redacted_value, null)
+    },
+    {
+      initialInitialize: null,
+      initialSetup: { needsApiKey: true, startupMode: 'user_deferred', userDeferred: true },
+      initializeReader: async () => {
+        throw new Error('setup.status should not call full initialize after user deferred first run')
+      }
+    }
+  )
+})
+
 test('OPL Codex gateway saves gflabtoken key through OPL configure-codex', async () => {
   const configured = []
   await withGateway(
