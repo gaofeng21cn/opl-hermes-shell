@@ -35,7 +35,8 @@ contract，而不是在本仓继续移植。
 - upstream app path: `apps/desktop`
 - evaluated source ref: `5e01a5dbf1b7bc0144d9057be706da1ea9f065c3`
 - upstream license: `MIT`
-- local role: One Person Lab App 的 Hermes Desktop technical verification candidate
+- local role: One Person Lab App 的唯一 foreground alternative；当前包与 smoke 证据
+  仍按 technical verification 读取，直到 App repo 显式完成 active-shell adoption。
 
 后续升级 Hermes Desktop 时，必须先把待升级 upstream ref 写清楚，再做对照。推荐的
 对照对象是：
