@@ -93,6 +93,12 @@ initialization only when needed, gflabtoken model access, and deferred OPL
 maintenance. Chat runs through the OPL Codex gateway backed by
 `codex app-server --listen stdio://`.
 
+Within the current One Person Lab App GUI policy, AionUI remains the active
+mainline shell and this Hermes Desktop checkout is the only foreground
+alternative. AGUI/CopilotKit is archived technical proof only; it is not a
+feature backlog, validation baseline, or default implementation source for this
+Hermes lane.
+
 The packaged candidate app is built by `npm run package` and verified by
 `npm run smoke:opl-first-run`. The smoke launches the real `.app`, checks the
 branded macOS executable, verifies missing-key/configured/hot-launch/fallback

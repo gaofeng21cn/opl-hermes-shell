@@ -6,6 +6,10 @@ replaceable implementation carrier. The App product truth stays in
 `/Users/gaofeng/workspace/one-person-lab-app`.
 
 Rules:
+- Treat the current App GUI topology as fixed unless the App repo changes its
+  contracts: AionUI is the active GUI mainline, Hermes Desktop / `hermes-codex`
+  is the only foreground alternative, and AGUI / `agui-codex` is archived
+  technical proof only.
 - Do not make Hermes runtime, gateway, providers, sessions, memory, or installer
   state an OPL source of truth.
 - Do not add OPL App state/action, page-state, first-run, Full runtime, or
@@ -14,6 +18,9 @@ Rules:
 - Keep the first candidate bridge small: OPL branding plus a Hermes-compatible
   Codex app-server adapter, while preserving the upstream Hermes Desktop
   feature shape for comparison.
+- Do not copy AGUI/CopilotKit proof work, validation burden, WebUI assumptions,
+  or polish backlog into this Hermes lane. If AGUI replay is explicitly
+  requested, route that work to the archived `opl-agui-codex-shell` surface.
 - Treat `docs/opl-hermes-upstream-strategy.md` as the local guide for upstream
   upgrades and OPL customization. Follow upstream Hermes Desktop first, then
   reapply the smallest OPL delta; do not redesign large UI areas without a
