@@ -7,9 +7,15 @@ const root = path.resolve(__dirname, '..')
 const outDir = path.join(root, 'out')
 const releaseDir = path.join(root, 'release')
 const manifestPath = path.join(outDir, 'hermes-codex-candidate-manifest.json')
-const productName = 'One Person Lab Hermes Candidate'
+const candidateProfile = JSON.parse(fs.readFileSync(path.join(root, 'contracts/opl-hermes-candidate-profile.json'), 'utf8'))
+const candidate = candidateProfile.candidate
+const topologyPolicy = candidateProfile.app_topology_policy
+const capabilityPolicy = candidateProfile.candidate_capability_policy
+const falseReadyBoundary = candidateProfile.false_ready_boundary
+const authorityBoundary = candidateProfile.authority_boundary
+const productName = candidate.product_name
 const executableName = productName
-const upstreamSourceRef = '5e01a5dbf1b7bc0144d9057be706da1ea9f065c3'
+const upstreamSourceRef = candidate.source_ref
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -93,7 +99,7 @@ function assembleAppBundle() {
   setPlist(plist, 'CFBundleDisplayName', productName)
   setPlist(plist, 'CFBundleExecutable', executableName)
   setPlist(plist, 'CFBundleName', productName)
-  setPlist(plist, 'CFBundleIdentifier', 'cn.onepersonlab.app.hermes-codex-candidate')
+  setPlist(plist, 'CFBundleIdentifier', candidate.app_id)
   setPlist(plist, 'CFBundleIconFile', 'icon.icns')
   setPlist(plist, 'LSApplicationCategoryType', 'public.app-category.developer-tools')
   return appDir
@@ -112,20 +118,24 @@ if (!appPath) throw new Error('electron-builder did not produce a .app bundle un
 const relativeAppPath = path.relative(root, appPath)
 const manifest = {
   status: 'candidate_app_bundle_ready',
-  shell: 'hermes-codex',
+  shell: candidate.shell_id,
   package_kind: 'explicit_candidate_app_bundle',
+  candidate_profile_ref: 'contracts/opl-hermes-candidate-profile.json',
   app_bundle_path: relativeAppPath,
   app_bundle_name: path.basename(appPath),
   app_bundle_executable: executableName,
-  source_repo: 'https://github.com/NousResearch/hermes-agent',
-  source_path: 'apps/desktop',
+  source_repo: candidate.source_repo,
+  source_path: candidate.source_path,
   source_ref: upstreamSourceRef,
-  license: 'MIT',
-  default_release_shell_unchanged: true,
-  active_shell_adopted: false,
-  hermes_runtime_authority_transfer: false,
-  official_hermes_backend_preserved: true,
-  official_hermes_desktop_ui_reused: true,
+  license: candidate.license,
+  default_release_shell_unchanged: topologyPolicy.default_release_shell_unchanged,
+  active_shell_adopted: topologyPolicy.active_shell_adopted,
+  active_mainline_shell: topologyPolicy.active_mainline_shell,
+  foreground_alternative: topologyPolicy.foreground_alternative,
+  archived_technical_proof_only: topologyPolicy.archived_technical_proof_only,
+  hermes_runtime_authority_transfer: capabilityPolicy.hermes_runtime_authority_transfer,
+  official_hermes_backend_preserved: capabilityPolicy.official_hermes_backend_preserved,
+  official_hermes_desktop_ui_reused: capabilityPolicy.official_hermes_desktop_ui_reused,
   backend_bridge: {
     strategy: 'preserve_official_hermes_backend_first',
     official_backend: 'Hermes first-launch bootstrap / hermes dashboard',
@@ -139,25 +149,14 @@ const manifest = {
     },
     planned_opl_executor_adapter: 'deeper OPL state/action diagnostics exposed through Codex Skill/Plugin/MCP-capable runtime, not GUI-side route receipts',
     forbidden_strategy: 'full backend replacement with minimal Codex shim',
-    hermes_runtime_authority_transfer: false,
-    codex_runtime_reference: 'codex app-server --listen stdio://'
+    hermes_runtime_authority_transfer: capabilityPolicy.hermes_runtime_authority_transfer,
+    codex_runtime_reference: capabilityPolicy.codex_runtime_reference
   },
-  implemented_capabilities: [
-    'official_hermes_desktop_ui_reused',
-    'official_hermes_backend_preserved',
-    'opl_defaults_seed_for_codex_runtime_and_domain_skills',
-    'codex_app_server_backed_hermes_gateway_adapter',
-    'opl_branding_and_icon_replaced',
-    'candidate_app_bundle_package'
-  ],
-  deferred_until_feature_comparison: [
-    'opl_app_state_action_bridge',
-    'app_product_profile_mapping',
-    'page_state_matrix_mapping',
-    'first_run_matrix_mapping',
-    'packaged_full_runtime',
-    'stable_release_asset_normalization'
-  ]
+  implemented_capabilities: capabilityPolicy.implemented_capabilities,
+  deferred_until_feature_comparison: capabilityPolicy.deferred_until_feature_comparison,
+  forbidden_resurrection_surfaces: capabilityPolicy.forbidden_resurrection_surfaces,
+  false_ready_boundary: falseReadyBoundary,
+  authority_boundary: authorityBoundary
 }
 fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 fs.writeFileSync(path.join(outDir, 'hermes-codex-source-receipt.json'), `${JSON.stringify(manifest, null, 2)}\n`)

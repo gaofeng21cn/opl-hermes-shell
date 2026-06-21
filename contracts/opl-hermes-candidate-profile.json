@@ -1,0 +1,92 @@
+{
+  "surface_kind": "opl_hermes_candidate_profile",
+  "schema_version": "opl-hermes-candidate-profile.v1",
+  "owner": "opl-hermes-shell",
+  "state": "technical_verification_candidate",
+  "machine_boundary": "This profile is the local candidate validation and packaging source for the Hermes foreground alternative. It is not App product truth, active-shell adoption evidence, release evidence, Live Evidence, or production readiness.",
+  "candidate": {
+    "shell_id": "hermes-codex",
+    "package_name": "opl-hermes-shell",
+    "product_name": "One Person Lab Hermes Candidate",
+    "app_id": "cn.onepersonlab.app.hermes-codex-candidate",
+    "protocol_scheme": "opl-hermes-candidate",
+    "main_process": "electron/main.cjs",
+    "source_repo": "https://github.com/NousResearch/hermes-agent",
+    "source_path": "apps/desktop",
+    "source_ref": "5e01a5dbf1b7bc0144d9057be706da1ea9f065c3",
+    "license": "MIT"
+  },
+  "app_topology_policy": {
+    "app_product_truth_owner": "one-person-lab-app",
+    "active_mainline_shell": "AionUI/opl-aion-shell",
+    "foreground_alternative": "Hermes Desktop/hermes-codex",
+    "archived_technical_proof_only": "AGUI/agui-codex",
+    "default_release_shell_unchanged": true,
+    "active_shell_adopted": false
+  },
+  "candidate_capability_policy": {
+    "official_hermes_backend_preserved": true,
+    "official_hermes_desktop_ui_reused": true,
+    "backend_replacement_allowed": false,
+    "hermes_runtime_authority_transfer": false,
+    "codex_runtime_reference": "codex app-server --listen stdio://",
+    "implemented_capabilities": [
+      "official_hermes_desktop_ui_reused",
+      "official_hermes_backend_preserved",
+      "opl_defaults_seed_for_codex_runtime_and_domain_skills",
+      "codex_app_server_backed_hermes_gateway_adapter",
+      "opl_branding_and_icon_replaced",
+      "candidate_app_bundle_package"
+    ],
+    "deferred_until_feature_comparison": [
+      "opl_app_state_action_bridge",
+      "app_product_profile_mapping",
+      "page_state_matrix_mapping",
+      "first_run_matrix_mapping",
+      "packaged_full_runtime",
+      "stable_release_asset_normalization",
+      "webui_parity_wrapper"
+    ],
+    "forbidden_resurrection_surfaces": [
+      "AGUI_default_candidate_path",
+      "App_release_owner_receipt",
+      "Hermes_runtime_source_of_truth",
+      "OPL_domain_truth",
+      "static_candidate_evidence_json",
+      "GUI_side_domain_route_receipts",
+      "stable_OPL_install_wrapper"
+    ]
+  },
+  "validation_profile": {
+    "default_command": "npm run validate:candidate",
+    "packaged_candidate_command": "npm run validate:candidate -- --require-app",
+    "visual_smoke_command": "npm run validate:candidate -- --require-visual-smoke",
+    "default_non_foreground": true,
+    "visual_smoke_requires_foreground_opt_in": true,
+    "required_source_refs": [
+      "README_OPL.md",
+      "docs/opl-hermes-upstream-strategy.md",
+      "scripts/package-opl-candidate-app.cjs",
+      "scripts/validate-hermes-codex-candidate.cjs"
+    ]
+  },
+  "false_ready_boundary": {
+    "candidate_valid_can_claim_active_shell_adopted": false,
+    "candidate_valid_can_claim_app_release_ready": false,
+    "candidate_valid_can_claim_production_ready": false,
+    "candidate_valid_can_claim_live_user_path": false,
+    "candidate_valid_can_claim_packaged_gui_acceptance": false,
+    "candidate_manifest_can_replace_app_contracts": false,
+    "packaged_smoke_can_sign_owner_receipt": false
+  },
+  "authority_boundary": {
+    "can_replace_app_product_truth": false,
+    "can_replace_app_shell_contract": false,
+    "can_write_domain_truth": false,
+    "can_sign_owner_receipt": false,
+    "can_create_typed_blocker": false,
+    "can_claim_release_ready": false,
+    "can_claim_production_ready": false,
+    "can_restore_agui_foreground_candidate": false
+  }
+}

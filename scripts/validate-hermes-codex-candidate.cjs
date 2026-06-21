@@ -16,7 +16,13 @@ const settings = read('src/app/settings/index.tsx')
 const configSettings = read('src/app/settings/config-settings.tsx')
 const settingsVisualSmoke = read('scripts/smoke-settings-visual.cjs')
 const firstRunSmoke = read('scripts/smoke-opl-first-run.cjs')
-const upstreamSourceRef = '5e01a5dbf1b7bc0144d9057be706da1ea9f065c3'
+const candidateProfile = JSON.parse(read('contracts/opl-hermes-candidate-profile.json'))
+const candidate = candidateProfile.candidate
+const topologyPolicy = candidateProfile.app_topology_policy
+const capabilityPolicy = candidateProfile.candidate_capability_policy
+const falseReadyBoundary = candidateProfile.false_ready_boundary
+const authorityBoundary = candidateProfile.authority_boundary
+const upstreamSourceRef = candidate.source_ref
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -43,12 +49,32 @@ function assertIconAlphaBounds({ maxWidth, maxHeight }) {
 }
 
 assert(pkg.name === 'opl-hermes-shell', 'package name must be opl-hermes-shell')
-assert(pkg.productName === 'One Person Lab Hermes Candidate', 'productName must be OPL branded')
-assert(pkg.build?.appId === 'cn.onepersonlab.app.hermes-codex-candidate', 'appId must be OPL candidate id')
-assert(pkg.main === 'electron/main.cjs', 'main must keep official Hermes Desktop main process')
+assert(candidateProfile.surface_kind === 'opl_hermes_candidate_profile', 'candidate profile must declare the expected surface kind')
+assert(candidateProfile.schema_version === 'opl-hermes-candidate-profile.v1', 'candidate profile schema version must be current')
+assert(pkg.name === candidate.package_name, 'package name must match candidate profile')
+assert(pkg.productName === candidate.product_name, 'productName must match candidate profile')
+assert(pkg.build?.appId === candidate.app_id, 'appId must match candidate profile')
+assert(pkg.build?.protocols?.some(protocol => (protocol.schemes || []).includes(candidate.protocol_scheme)), 'protocol scheme must match candidate profile')
+assert(pkg.main === candidate.main_process, 'main must keep official Hermes Desktop main process')
 assert(read('README_OPL.md').includes(`evaluated source ref: \`${upstreamSourceRef}\``), 'README_OPL.md must record the current upstream source ref')
 assert(read('docs/opl-hermes-upstream-strategy.md').includes(`evaluated source ref: \`${upstreamSourceRef}\``), 'upstream strategy doc must record the current upstream source ref')
-assert(read('scripts/package-opl-candidate-app.cjs').includes(`const upstreamSourceRef = '${upstreamSourceRef}'`), 'candidate package wrapper must stamp the current upstream source ref')
+assert(read('scripts/package-opl-candidate-app.cjs').includes("contracts/opl-hermes-candidate-profile.json"), 'candidate package wrapper must read the candidate profile contract')
+assert(topologyPolicy.active_mainline_shell === 'AionUI/opl-aion-shell', 'candidate profile must preserve AionUI as active mainline')
+assert(topologyPolicy.foreground_alternative === 'Hermes Desktop/hermes-codex', 'candidate profile must declare Hermes as the only foreground alternative')
+assert(topologyPolicy.archived_technical_proof_only === 'AGUI/agui-codex', 'candidate profile must keep AGUI archived')
+assert(topologyPolicy.default_release_shell_unchanged === true, 'candidate profile must not switch the default release shell')
+assert(topologyPolicy.active_shell_adopted === false, 'candidate profile must not claim active-shell adoption')
+assert(capabilityPolicy.official_hermes_backend_preserved === true, 'candidate profile must preserve the official Hermes backend')
+assert(capabilityPolicy.backend_replacement_allowed === false, 'candidate profile must forbid full backend replacement')
+assert(capabilityPolicy.hermes_runtime_authority_transfer === false, 'candidate profile must not transfer Hermes runtime authority')
+assert(capabilityPolicy.codex_runtime_reference === 'codex app-server --listen stdio://', 'candidate profile must point at Codex app-server as adapter runtime')
+assert(capabilityPolicy.deferred_until_feature_comparison.includes('webui_parity_wrapper'), 'candidate profile must defer WebUI parity until comparison')
+assert(capabilityPolicy.forbidden_resurrection_surfaces.includes('AGUI_default_candidate_path'), 'candidate profile must forbid AGUI foreground resurrection')
+assert(falseReadyBoundary.candidate_valid_can_claim_active_shell_adopted === false, 'candidate validation cannot claim active-shell adoption')
+assert(falseReadyBoundary.candidate_valid_can_claim_app_release_ready === false, 'candidate validation cannot claim release readiness')
+assert(falseReadyBoundary.candidate_manifest_can_replace_app_contracts === false, 'candidate manifest cannot replace App contracts')
+assert(authorityBoundary.can_replace_app_product_truth === false, 'candidate profile cannot replace App product truth')
+assert(authorityBoundary.can_restore_agui_foreground_candidate === false, 'candidate profile cannot restore AGUI as a foreground candidate')
 assert(read('README.md').includes('The native desktop app for [Hermes Agent]'), 'official Hermes README must remain available')
 assert(read('UPSTREAM_README.md').includes('Hermes Agent'), 'upstream README receipt must remain available')
 assert(mainProcess.includes("Resolving Hermes backend"), 'main process must preserve official Hermes backend resolution')
@@ -168,7 +194,13 @@ if (requireApp) {
   assert(fs.existsSync(manifestPath), 'candidate manifest missing')
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
   assert(manifest.status === 'candidate_app_bundle_ready', 'manifest status must be ready')
+  assert(manifest.candidate_profile_ref === 'contracts/opl-hermes-candidate-profile.json', 'candidate manifest must reference the candidate profile contract')
+  assert(manifest.shell === candidate.shell_id, 'candidate manifest shell must match candidate profile')
   assert(manifest.source_ref === upstreamSourceRef, 'candidate manifest must use the current upstream source ref')
+  assert(manifest.default_release_shell_unchanged === topologyPolicy.default_release_shell_unchanged, 'candidate manifest must keep the default release shell unchanged')
+  assert(manifest.active_shell_adopted === topologyPolicy.active_shell_adopted, 'candidate manifest must not claim active shell adoption')
+  assert(manifest.authority_boundary?.can_replace_app_product_truth === false, 'candidate manifest must preserve App product truth authority')
+  assert(manifest.false_ready_boundary?.candidate_valid_can_claim_app_release_ready === false, 'candidate manifest must carry the false-ready boundary')
   const appPath = path.join(root, manifest.app_bundle_path)
   assert(fs.existsSync(path.join(appPath, 'Contents/Info.plist')), 'Info.plist missing')
   const info = read(path.relative(root, path.join(appPath, 'Contents/Info.plist')))

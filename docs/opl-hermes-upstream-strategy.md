@@ -52,6 +52,21 @@ contract，而不是在本仓继续移植。
 或 runtime 改动，都要能回答：它是在跟随 upstream、新增 OPL 必要定制、隐藏不需要的
 Hermes 普通用户面，还是临时实验。
 
+## Candidate Profile Contract
+
+`contracts/opl-hermes-candidate-profile.json` 是本仓 technical verification 的机器入口。
+它把 product identity、upstream source ref、App topology、deferred capability、
+forbidden resurrection surface、false-ready boundary 和 authority boundary 收在同一
+个 contract 中。`scripts/validate-hermes-codex-candidate.cjs` 和
+`scripts/package-opl-candidate-app.cjs` 必须从该 contract 读取候选身份和边界；不要再
+在脚本、manifest 和文档中各自维护一套 Hermes candidate truth。
+
+这个 contract 只属于 `opl-hermes-shell` 候选验证面。它不能替代 App repo 的
+`contracts/app-shell-adapter.json`、`contracts/app-shell-candidates.json`、page-state /
+first-run / release gates、active-shell adoption decision、release owner receipt 或
+Live Evidence。`validate:candidate` 通过只表示本仓候选结构可验证，不表示 release-ready、
+production-ready、packaged GUI accepted 或 active shell adopted。
+
 ## 最近 upstream intake
 
 2026-06-17 intake：

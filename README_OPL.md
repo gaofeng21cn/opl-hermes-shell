@@ -16,6 +16,7 @@ Codex App 换壳体验的 GUI 路线。
 - evaluated source ref: `5e01a5dbf1b7bc0144d9057be706da1ea9f065c3`
 - upstream license: MIT
 - local shared package: `apps/shared` copied to `packages/shared`
+- candidate profile contract: `contracts/opl-hermes-candidate-profile.json`
 
 长期维护原则见
 [`docs/opl-hermes-upstream-strategy.md`](docs/opl-hermes-upstream-strategy.md)。
@@ -63,6 +64,11 @@ OPL_APP_SHELL_ADAPTER_CONTRACT=contracts/shell-adapters/hermes-codex.json npm ru
   和 MAS/MAG/RCA 不得再用这个最小 shim 全量接管 `/api/*` 和 WebSocket backend。
 - candidate package wrapper：`scripts/package-opl-candidate-app.cjs` 生成本地
   macOS `.app` 候选包，并写出 `out/hermes-codex-candidate-manifest.json`。
+- candidate profile contract：`contracts/opl-hermes-candidate-profile.json` 是本仓
+  technical verification 的机器入口。`validate:candidate` 与候选包 manifest 都从
+  这里读取 product identity、upstream source ref、App topology、deferred surfaces、
+  false-ready boundary 和 authority boundary。它不能替代 App repo 的 shell adapter
+  contract、active-shell adoption、release gate 或 owner receipt。
 
 在完成 Hermes 原生功能对比前，以下内容不进入本候选基线：
 
