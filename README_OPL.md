@@ -69,6 +69,12 @@ OPL_APP_SHELL_ADAPTER_CONTRACT=contracts/shell-adapters/hermes-codex.json npm ru
   这里读取 product identity、upstream source ref、App topology、deferred surfaces、
   false-ready boundary 和 authority boundary。它不能替代 App repo 的 shell adapter
   contract、active-shell adoption、release gate 或 owner receipt。
+- candidate functional convergence readback：`npm run validate:candidate` 会从同一
+  contract 和 `electron/opl-codex-gateway.cjs#describeOplCodexGatewayScope` 输出
+  `functional_convergence_readback`。该读面只证明当前 Hermes candidate 的已实现能力、
+  deferred surfaces、forbidden resurrection、adapter scope、false-ready boundary 和
+  authority boundary 与本仓技术验证一致；它仍不能声明 active-shell adoption、App
+  release-ready、packaged GUI acceptance、owner receipt、typed blocker 或 domain truth。
 
 在完成 Hermes 原生功能对比前，以下内容不进入本候选基线：
 

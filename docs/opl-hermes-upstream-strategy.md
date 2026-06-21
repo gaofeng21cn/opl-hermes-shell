@@ -61,6 +61,14 @@ forbidden resurrection surface、false-ready boundary 和 authority boundary 收
 `scripts/package-opl-candidate-app.cjs` 必须从该 contract 读取候选身份和边界；不要再
 在脚本、manifest 和文档中各自维护一套 Hermes candidate truth。
 
+`validate:candidate` 还必须输出 `functional_convergence_readback`。这个读面从同一
+contract 的 `functional_convergence_readback` 节和
+`electron/opl-codex-gateway.cjs#describeOplCodexGatewayScope` 派生，列出已实现能力的
+source evidence、deferred surfaces、forbidden resurrection surfaces、required/forbidden
+RPC 与 REST scope、false-ready boundary、authority boundary 和 `can_claim=false` 清单。
+它是 technical verification readback，不是 App-owned adoption gate；不得扩展成第二套
+App shell truth、owner receipt、typed blocker、release evidence 或 Live Evidence。
+
 这个 contract 只属于 `opl-hermes-shell` 候选验证面。它不能替代 App repo 的
 `contracts/app-shell-adapter.json`、`contracts/app-shell-candidates.json`、page-state /
 first-run / release gates、active-shell adoption decision、release owner receipt 或

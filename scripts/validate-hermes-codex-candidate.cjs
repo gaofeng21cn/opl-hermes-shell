@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..')
 const requireApp = process.argv.includes('--require-app')
 const requireVisualSmoke = process.argv.includes('--require-visual-smoke')
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+const { describeOplCodexGatewayScope } = require(path.join(root, 'electron/opl-codex-gateway.cjs'))
 const mainProcess = read('electron/main.cjs')
 const oplBootstrapRunner = read('electron/opl-bootstrap-runner.cjs')
 const oplCodexGateway = read('electron/opl-codex-gateway.cjs')
@@ -20,9 +21,11 @@ const candidateProfile = JSON.parse(read('contracts/opl-hermes-candidate-profile
 const candidate = candidateProfile.candidate
 const topologyPolicy = candidateProfile.app_topology_policy
 const capabilityPolicy = candidateProfile.candidate_capability_policy
+const convergenceProfile = candidateProfile.functional_convergence_readback
 const falseReadyBoundary = candidateProfile.false_ready_boundary
 const authorityBoundary = candidateProfile.authority_boundary
 const upstreamSourceRef = candidate.source_ref
+const gatewayScope = describeOplCodexGatewayScope()
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -34,6 +37,136 @@ function read(relativePath) {
 
 function sha256(relativePath) {
   return crypto.createHash('sha256').update(fs.readFileSync(path.join(root, relativePath))).digest('hex')
+}
+
+function routeKey(route) {
+  return `${String(route.method || 'GET').toUpperCase()} ${route.path}`
+}
+
+function assertAllFalse(record, label) {
+  for (const [key, value] of Object.entries(record || {})) {
+    assert(value === false, `${label}.${key} must be false`)
+  }
+}
+
+function implementedCapabilityEvidence() {
+  return {
+    official_hermes_desktop_ui_reused: [
+      { ref: 'src/app/index.tsx#DesktopController', present: read('src/app/index.tsx').includes('DesktopController') },
+      { ref: 'src/main.tsx#HashRouter', present: read('src/main.tsx').includes('HashRouter') }
+    ],
+    official_hermes_backend_preserved: [
+      { ref: 'electron/main.cjs#official-backend-resolution', present: mainProcess.includes('Resolving Hermes backend') },
+      { ref: 'README.md#upstream-readme', present: read('README.md').includes('The native desktop app for [Hermes Agent]') }
+    ],
+    opl_defaults_seed_for_codex_runtime_and_domain_skills: [
+      { ref: 'electron/opl-defaults.cjs#openai_runtime', present: read('electron/opl-defaults.cjs').includes('openai_runtime') },
+      { ref: 'electron/opl-defaults.cjs#external_dirs', present: read('electron/opl-defaults.cjs').includes('external_dirs') }
+    ],
+    codex_app_server_backed_hermes_gateway_adapter: [
+      {
+        ref: 'electron/opl-codex-gateway.cjs#describeOplCodexGatewayScope',
+        present:
+          gatewayScope.mode === 'codex_app_server_skill_first_adapter' &&
+          gatewayScope.executor === 'codex_app_server' &&
+          gatewayScope.replacesHermesBackend === false
+      },
+      { ref: 'electron/opl-codex-gateway.cjs#codex-app-server', present: oplCodexGateway.includes("'app-server', '--listen', 'stdio://'") }
+    ],
+    opl_branding_and_icon_replaced: [
+      { ref: 'package.json#productName', present: pkg.productName === candidate.product_name },
+      { ref: 'assets/icon.png', present: fs.existsSync(path.join(root, 'assets/icon.png')) },
+      { ref: 'public/apple-touch-icon.png', present: sha256('public/apple-touch-icon.png') === sha256('assets/icon.png') }
+    ],
+    candidate_app_bundle_package: [
+      { ref: 'scripts/package-opl-candidate-app.cjs#candidate-profile', present: read('scripts/package-opl-candidate-app.cjs').includes('contracts/opl-hermes-candidate-profile.json') },
+      { ref: 'package.json#package-script', present: Boolean(pkg.scripts?.package && pkg.scripts?.['pack:opl']) }
+    ]
+  }
+}
+
+function assertImplementedCapabilityEvidence() {
+  const evidenceByCapability = implementedCapabilityEvidence()
+  for (const capability of capabilityPolicy.implemented_capabilities) {
+    assert(evidenceByCapability[capability], `implemented capability must have validator evidence: ${capability}`)
+    assert(
+      evidenceByCapability[capability].every(item => item.present === true),
+      `implemented capability is missing source evidence: ${capability}`
+    )
+  }
+}
+
+function buildFunctionalConvergenceReadback() {
+  const requiredScope = convergenceProfile.required_adapter_scope
+  const implementedEvidence = implementedCapabilityEvidence()
+  const restRouteKeys = new Set(gatewayScope.restRoutes.map(routeKey))
+  const rpcMethods = new Set(gatewayScope.rpcMethods)
+  const requiredRestRoutes = requiredScope.required_rest_routes.map(ref => ({
+    ref,
+    present: restRouteKeys.has(ref)
+  }))
+  const forbiddenRestRoutes = requiredScope.forbidden_rest_routes.map(ref => ({
+    ref,
+    present: restRouteKeys.has(ref)
+  }))
+  const requiredRpcMethods = requiredScope.required_rpc_methods.map(method => ({
+    method,
+    present: rpcMethods.has(method)
+  }))
+  const forbiddenRpcMethods = requiredScope.forbidden_rpc_methods.map(method => ({
+    method,
+    present: rpcMethods.has(method)
+  }))
+  const implemented = capabilityPolicy.implemented_capabilities.map(capability => ({
+    capability,
+    evidence: implementedEvidence[capability]
+  }))
+
+  const ok =
+    gatewayScope.mode === requiredScope.mode &&
+    gatewayScope.executor === requiredScope.executor &&
+    gatewayScope.replacesHermesBackend === requiredScope.replaces_hermes_backend &&
+    requiredRestRoutes.every(route => route.present) &&
+    forbiddenRestRoutes.every(route => !route.present) &&
+    requiredRpcMethods.every(method => method.present) &&
+    forbiddenRpcMethods.every(method => !method.present) &&
+    implemented.every(item => item.evidence?.every(evidence => evidence.present === true)) &&
+    Object.values(convergenceProfile.can_claim).every(value => value === false)
+
+  return {
+    surface_kind: convergenceProfile.surface_kind,
+    schema_version: convergenceProfile.schema_version,
+    status: ok ? 'hermes_codex_candidate_functional_convergence_valid' : 'hermes_codex_candidate_functional_convergence_invalid',
+    ok,
+    state: convergenceProfile.state,
+    readback_command_ref: convergenceProfile.readback_command_ref,
+    topology: {
+      app_product_truth_owner: topologyPolicy.app_product_truth_owner,
+      active_mainline_shell: topologyPolicy.active_mainline_shell,
+      foreground_alternative: topologyPolicy.foreground_alternative,
+      archived_technical_proof_only: topologyPolicy.archived_technical_proof_only,
+      default_release_shell_unchanged: topologyPolicy.default_release_shell_unchanged,
+      active_shell_adopted: topologyPolicy.active_shell_adopted
+    },
+    implemented_capabilities: implemented,
+    deferred_until_feature_comparison: capabilityPolicy.deferred_until_feature_comparison,
+    forbidden_resurrection_surfaces: capabilityPolicy.forbidden_resurrection_surfaces,
+    adapter_scope: {
+      ref: convergenceProfile.adapter_scope_ref,
+      mode: gatewayScope.mode,
+      executor: gatewayScope.executor,
+      replaces_hermes_backend: gatewayScope.replacesHermesBackend,
+      required_rpc_methods: requiredRpcMethods,
+      forbidden_rpc_methods: forbiddenRpcMethods,
+      required_rest_routes: requiredRestRoutes,
+      forbidden_rest_routes: forbiddenRestRoutes,
+      upstream_hermes_backend_owns: gatewayScope.upstreamHermesBackendOwns,
+      codex_skill_ids: gatewayScope.codexSkills.map(skill => skill.skill_id)
+    },
+    false_ready_boundary: falseReadyBoundary,
+    authority_boundary: authorityBoundary,
+    can_claim: convergenceProfile.can_claim
+  }
 }
 
 function assertIconAlphaBounds({ maxWidth, maxHeight }) {
@@ -70,11 +203,22 @@ assert(capabilityPolicy.hermes_runtime_authority_transfer === false, 'candidate 
 assert(capabilityPolicy.codex_runtime_reference === 'codex app-server --listen stdio://', 'candidate profile must point at Codex app-server as adapter runtime')
 assert(capabilityPolicy.deferred_until_feature_comparison.includes('webui_parity_wrapper'), 'candidate profile must defer WebUI parity until comparison')
 assert(capabilityPolicy.forbidden_resurrection_surfaces.includes('AGUI_default_candidate_path'), 'candidate profile must forbid AGUI foreground resurrection')
+assert(convergenceProfile.surface_kind === 'opl_hermes_candidate_functional_convergence_readback', 'candidate profile must define the convergence readback surface')
+assert(convergenceProfile.schema_version === 'opl-hermes-functional-convergence-readback.v1', 'candidate profile must keep the convergence readback schema current')
+assert(convergenceProfile.readback_command_ref === 'npm run validate:candidate', 'candidate profile must route convergence readback through validate:candidate')
+assert(convergenceProfile.state === 'technical_verification_candidate_not_active_shell', 'convergence readback must not claim active-shell adoption')
+assert(convergenceProfile.adapter_scope_ref === 'electron/opl-codex-gateway.cjs#describeOplCodexGatewayScope', 'convergence readback must point at the gateway scope helper')
+assert(convergenceProfile.required_adapter_scope.mode === 'codex_app_server_skill_first_adapter', 'convergence readback must require the Codex app-server adapter')
+assert(convergenceProfile.required_adapter_scope.executor === 'codex_app_server', 'convergence readback must require Codex app-server executor scope')
+assert(convergenceProfile.required_adapter_scope.replaces_hermes_backend === false, 'convergence readback must forbid Hermes backend replacement')
+assertAllFalse(convergenceProfile.can_claim, 'functional_convergence_readback.can_claim')
 assert(falseReadyBoundary.candidate_valid_can_claim_active_shell_adopted === false, 'candidate validation cannot claim active-shell adoption')
 assert(falseReadyBoundary.candidate_valid_can_claim_app_release_ready === false, 'candidate validation cannot claim release readiness')
 assert(falseReadyBoundary.candidate_manifest_can_replace_app_contracts === false, 'candidate manifest cannot replace App contracts')
+assertAllFalse(falseReadyBoundary, 'false_ready_boundary')
 assert(authorityBoundary.can_replace_app_product_truth === false, 'candidate profile cannot replace App product truth')
 assert(authorityBoundary.can_restore_agui_foreground_candidate === false, 'candidate profile cannot restore AGUI as a foreground candidate')
+assertAllFalse(authorityBoundary, 'authority_boundary')
 assert(read('README.md').includes('The native desktop app for [Hermes Agent]'), 'official Hermes README must remain available')
 assert(read('UPSTREAM_README.md').includes('Hermes Agent'), 'upstream README receipt must remain available')
 assert(mainProcess.includes("Resolving Hermes backend"), 'main process must preserve official Hermes backend resolution')
@@ -188,6 +332,10 @@ assert(!fs.existsSync(path.join(root, 'resources/opl-install.sh')), 'candidate m
 assert(!fs.existsSync(path.join(root, 'scripts/validate-opl-state-model.cjs')), 'candidate must not claim OPL page-state/state-model mapping yet')
 assert(!fs.existsSync(path.join(root, 'scripts/validate-packaged-runtime.cjs')), 'candidate must not carry packaged-runtime gate yet')
 assert(!fs.existsSync(path.join(root, 'src/candidateContractEvidence.json')), 'candidate must not use static evidence as truth')
+assertImplementedCapabilityEvidence()
+
+const functionalConvergenceReadback = buildFunctionalConvergenceReadback()
+assert(functionalConvergenceReadback.ok === true, 'functional convergence readback must be valid')
 
 if (requireApp) {
   const manifestPath = path.join(root, 'out/hermes-codex-candidate-manifest.json')
@@ -314,5 +462,6 @@ if (requireVisualSmoke) {
 console.log(JSON.stringify({
   status: 'hermes_codex_candidate_valid',
   require_app: requireApp,
-  require_visual_smoke: requireVisualSmoke
+  require_visual_smoke: requireVisualSmoke,
+  functional_convergence_readback: functionalConvergenceReadback
 }, null, 2))

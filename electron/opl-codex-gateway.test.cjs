@@ -1,5 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const candidateProfile = require('../contracts/opl-hermes-candidate-profile.json')
 
 const {
   createOplCodexGateway,
@@ -274,10 +275,15 @@ test('OPL Codex gateway saves gflabtoken key through OPL configure-codex', async
 
 test('OPL Codex gateway scope helper documents executor bridge ownership', () => {
   const scope = describeOplCodexGatewayScope()
+  const convergence = candidateProfile.functional_convergence_readback
+  const requiredScope = convergence.required_adapter_scope
+  const restRoutes = new Set(scope.restRoutes.map(route => `${route.method} ${route.path}`))
+  const rpcMethods = new Set(scope.rpcMethods)
 
-  assert.equal(scope.mode, 'codex_app_server_skill_first_adapter')
-  assert.equal(scope.replacesHermesBackend, false)
-  assert.equal(scope.executor, 'codex_app_server')
+  assert.equal(convergence.surface_kind, 'opl_hermes_candidate_functional_convergence_readback')
+  assert.equal(scope.mode, requiredScope.mode)
+  assert.equal(scope.replacesHermesBackend, requiredScope.replaces_hermes_backend)
+  assert.equal(scope.executor, requiredScope.executor)
   assert.equal(isOplCodexBridgeRpcMethod('prompt.submit'), true)
   assert.equal(isOplCodexBridgeRpcMethod('config.get'), true)
   assert.equal(isOplCodexBridgeRpcMethod('config.set'), true)
@@ -293,6 +299,21 @@ test('OPL Codex gateway scope helper documents executor bridge ownership', () =>
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/config'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/opl/codex-skills'), true)
   assert.equal(isOplCodexBridgeRestRoute('GET', '/api/opl/purpose-routes'), false)
+  for (const method of requiredScope.required_rpc_methods) {
+    assert.equal(rpcMethods.has(method), true, `${method} must remain in the convergence readback scope`)
+  }
+  for (const method of requiredScope.forbidden_rpc_methods) {
+    assert.equal(rpcMethods.has(method), false, `${method} must not re-enter the convergence readback scope`)
+  }
+  for (const route of requiredScope.required_rest_routes) {
+    assert.equal(restRoutes.has(route), true, `${route} must remain in the convergence readback scope`)
+  }
+  for (const route of requiredScope.forbidden_rest_routes) {
+    assert.equal(restRoutes.has(route), false, `${route} must not re-enter the convergence readback scope`)
+  }
+  for (const [claim, value] of Object.entries(convergence.can_claim)) {
+    assert.equal(value, false, `validate:candidate must not claim ${claim}`)
+  }
   assert.equal(scope.upstreamHermesBackendOwns.includes('profiles'), true)
   assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'mas' && skill.invocation === '$mas'), true)
   assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'mag' && skill.invocation === '$mag'), true)
