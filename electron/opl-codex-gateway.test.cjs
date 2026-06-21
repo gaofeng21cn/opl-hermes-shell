@@ -321,6 +321,43 @@ test('OPL Codex gateway scope helper documents executor bridge ownership', () =>
   assert.equal(scope.codexSkills.some(skill => skill.skill_id === 'opl'), true)
 })
 
+test('OPL Codex gateway scope helper documents ordinary operator functional surfaces', () => {
+  const scope = describeOplCodexGatewayScope()
+  const operatorReadback = candidateProfile.operator_functional_surface_readback
+  const restRoutes = new Set(scope.restRoutes.map(route => `${route.method} ${route.path}`))
+  const rpcMethods = new Set(scope.rpcMethods)
+  const skillIds = new Set(scope.codexSkills.map(skill => skill.skill_id))
+  const slashCommands = new Set(scope.codexSkills.filter(skill => skill.skill_id !== 'opl').map(skill => `/${skill.skill_id}`))
+
+  assert.equal(operatorReadback.surface_kind, 'opl_hermes_candidate_operator_functional_surface_readback')
+  assert.equal(operatorReadback.state, 'ordinary_operator_candidate_surface_available_not_active_shell')
+  assert.equal(operatorReadback.gateway_scope_ref, 'electron/opl-codex-gateway.cjs#describeOplCodexGatewayScope')
+
+  for (const surface of operatorReadback.required_operator_surfaces) {
+    for (const route of surface.required_rest_routes || []) {
+      assert.equal(restRoutes.has(route), true, `${surface.surface_id} route ${route} must remain available`)
+    }
+    for (const method of surface.required_rpc_methods || []) {
+      assert.equal(rpcMethods.has(method), true, `${surface.surface_id} RPC ${method} must remain available`)
+    }
+    for (const skillId of surface.required_skill_ids || []) {
+      assert.equal(skillIds.has(skillId), true, `${surface.surface_id} skill ${skillId} must remain visible`)
+    }
+    for (const command of surface.required_slash_commands || []) {
+      assert.equal(slashCommands.has(command), true, `${surface.surface_id} slash ${command} must remain visible`)
+    }
+  }
+
+  const domainSkillCatalog = operatorReadback.required_operator_surfaces.find(
+    surface => surface.surface_id === 'domain_skill_catalog'
+  )
+  assert.equal(domainSkillCatalog.gui_executes_domain_commands, false)
+  assert.equal(domainSkillCatalog.creates_second_truth_source, false)
+  for (const [claim, value] of Object.entries(operatorReadback.can_claim)) {
+    assert.equal(value, false, `operator readback must not claim ${claim}`)
+  }
+})
+
 test('OPL Codex gateway returns renderer-safe official UI bootstrap REST shapes', async () => {
   await withGateway(async descriptor => {
     const profiles = await requestJson(descriptor.baseUrl, '/api/profiles')

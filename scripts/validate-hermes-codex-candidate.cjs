@@ -22,6 +22,7 @@ const candidate = candidateProfile.candidate
 const topologyPolicy = candidateProfile.app_topology_policy
 const capabilityPolicy = candidateProfile.candidate_capability_policy
 const convergenceProfile = candidateProfile.functional_convergence_readback
+const operatorSurfaceProfile = candidateProfile.operator_functional_surface_readback
 const falseReadyBoundary = candidateProfile.false_ready_boundary
 const authorityBoundary = candidateProfile.authority_boundary
 const upstreamSourceRef = candidate.source_ref
@@ -169,6 +170,78 @@ function buildFunctionalConvergenceReadback() {
   }
 }
 
+function buildOperatorFunctionalSurfaceReadback() {
+  const restRouteKeys = new Set(gatewayScope.restRoutes.map(routeKey))
+  const rpcMethods = new Set(gatewayScope.rpcMethods)
+  const skillIds = new Set(gatewayScope.codexSkills.map(skill => skill.skill_id))
+  const operatorSurfaces = operatorSurfaceProfile.required_operator_surfaces.map(surface => {
+    const requiredRestRoutes = (surface.required_rest_routes || []).map(ref => ({
+      ref,
+      present: restRouteKeys.has(ref)
+    }))
+    const requiredRpcMethods = (surface.required_rpc_methods || []).map(method => ({
+      method,
+      present: rpcMethods.has(method)
+    }))
+    const requiredSkillIds = (surface.required_skill_ids || []).map(skill_id => ({
+      skill_id,
+      present: skillIds.has(skill_id)
+    }))
+    const requiredSlashCommands = (surface.required_slash_commands || []).map(command => ({
+      command,
+      present: codexSkillSlashCommands().has(command)
+    }))
+
+    return {
+      surface_id: surface.surface_id,
+      source: surface.source,
+      required_rest_routes: requiredRestRoutes,
+      required_rpc_methods: requiredRpcMethods,
+      required_skill_ids: requiredSkillIds,
+      required_slash_commands: requiredSlashCommands,
+      authority_boundary: {
+        gui_executes_domain_commands: surface.gui_executes_domain_commands ?? false,
+        creates_second_truth_source: surface.creates_second_truth_source ?? false,
+        ordinary_provider_surface: surface.ordinary_provider_surface || null,
+        prompt_submit_ack_boundary: surface.prompt_submit_ack_boundary || null
+      },
+      ok:
+        requiredRestRoutes.every(route => route.present) &&
+        requiredRpcMethods.every(method => method.present) &&
+        requiredSkillIds.every(skill => skill.present) &&
+        requiredSlashCommands.every(command => command.present)
+    }
+  })
+  const ok =
+    operatorSurfaces.every(surface => surface.ok) &&
+    Object.values(operatorSurfaceProfile.can_claim).every(value => value === false)
+
+  return {
+    surface_kind: operatorSurfaceProfile.surface_kind,
+    schema_version: operatorSurfaceProfile.schema_version,
+    status: ok
+      ? 'hermes_codex_candidate_operator_functional_surface_valid'
+      : 'hermes_codex_candidate_operator_functional_surface_invalid',
+    ok,
+    state: operatorSurfaceProfile.state,
+    readback_command_ref: operatorSurfaceProfile.readback_command_ref,
+    gateway_scope_ref: operatorSurfaceProfile.gateway_scope_ref,
+    operator_surfaces: operatorSurfaces,
+    codex_skill_ids: gatewayScope.codexSkills.map(skill => skill.skill_id),
+    can_claim: operatorSurfaceProfile.can_claim,
+    false_ready_boundary: falseReadyBoundary,
+    authority_boundary: authorityBoundary
+  }
+}
+
+function codexSkillSlashCommands() {
+  return new Set(
+    gatewayScope.codexSkills
+      .filter(skill => skill.skill_id !== 'opl')
+      .map(skill => `/${skill.skill_id}`)
+  )
+}
+
 function assertIconAlphaBounds({ maxWidth, maxHeight }) {
   const iconBounds = require('node:child_process')
     .spawnSync('magick', ['assets/icon.png', '-alpha', 'extract', '-format', '%@', 'info:'], { cwd: root, encoding: 'utf8' })
@@ -212,6 +285,12 @@ assert(convergenceProfile.required_adapter_scope.mode === 'codex_app_server_skil
 assert(convergenceProfile.required_adapter_scope.executor === 'codex_app_server', 'convergence readback must require Codex app-server executor scope')
 assert(convergenceProfile.required_adapter_scope.replaces_hermes_backend === false, 'convergence readback must forbid Hermes backend replacement')
 assertAllFalse(convergenceProfile.can_claim, 'functional_convergence_readback.can_claim')
+assert(operatorSurfaceProfile.surface_kind === 'opl_hermes_candidate_operator_functional_surface_readback', 'candidate profile must define the operator functional surface readback')
+assert(operatorSurfaceProfile.schema_version === 'opl-hermes-operator-functional-surface-readback.v1', 'candidate profile must keep the operator functional surface schema current')
+assert(operatorSurfaceProfile.readback_command_ref === 'npm run validate:candidate', 'candidate profile must route operator readback through validate:candidate')
+assert(operatorSurfaceProfile.gateway_scope_ref === 'electron/opl-codex-gateway.cjs#describeOplCodexGatewayScope', 'operator readback must point at the gateway scope helper')
+assert(operatorSurfaceProfile.state === 'ordinary_operator_candidate_surface_available_not_active_shell', 'operator readback must not claim active-shell adoption')
+assertAllFalse(operatorSurfaceProfile.can_claim, 'operator_functional_surface_readback.can_claim')
 assert(falseReadyBoundary.candidate_valid_can_claim_active_shell_adopted === false, 'candidate validation cannot claim active-shell adoption')
 assert(falseReadyBoundary.candidate_valid_can_claim_app_release_ready === false, 'candidate validation cannot claim release readiness')
 assert(falseReadyBoundary.candidate_manifest_can_replace_app_contracts === false, 'candidate manifest cannot replace App contracts')
@@ -336,6 +415,8 @@ assertImplementedCapabilityEvidence()
 
 const functionalConvergenceReadback = buildFunctionalConvergenceReadback()
 assert(functionalConvergenceReadback.ok === true, 'functional convergence readback must be valid')
+const operatorFunctionalSurfaceReadback = buildOperatorFunctionalSurfaceReadback()
+assert(operatorFunctionalSurfaceReadback.ok === true, 'operator functional surface readback must be valid')
 
 if (requireApp) {
   const manifestPath = path.join(root, 'out/hermes-codex-candidate-manifest.json')
@@ -463,5 +544,6 @@ console.log(JSON.stringify({
   status: 'hermes_codex_candidate_valid',
   require_app: requireApp,
   require_visual_smoke: requireVisualSmoke,
-  functional_convergence_readback: functionalConvergenceReadback
+  functional_convergence_readback: functionalConvergenceReadback,
+  operator_functional_surface_readback: operatorFunctionalSurfaceReadback
 }, null, 2))

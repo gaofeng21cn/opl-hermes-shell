@@ -69,6 +69,16 @@ RPC 与 REST scope、false-ready boundary、authority boundary 和 `can_claim=fa
 它是 technical verification readback，不是 App-owned adoption gate；不得扩展成第二套
 App shell truth、owner receipt、typed blocker、release evidence 或 Live Evidence。
 
+`validate:candidate` 同时输出 `operator_functional_surface_readback`。这个读面仍从同一
+contract 与 `describeOplCodexGatewayScope` 派生，只压缩 ordinary operator 当前可见的
+候选功能面：MAS/MAG/RCA/OPL Codex Skill catalog、`session.create` / `prompt.submit`
+普通会话路径、gflabtoken-only 模型访问与 renderer-safe config/settings、slash/path/file
+/ image composer affordances。它只证明 Hermes candidate 已有可验证的 operator-facing
+功能入口，且 GUI adapter 不执行 domain command、不创建第二真相源；它不能声明
+active-shell adoption、App release readiness、packaged GUI acceptance、owner receipt、
+typed blocker、domain truth、domain route authority、sustained App/operator consumption
+或 Live Evidence。
+
 这个 contract 只属于 `opl-hermes-shell` 候选验证面。它不能替代 App repo 的
 `contracts/app-shell-adapter.json`、`contracts/app-shell-candidates.json`、page-state /
 first-run / release gates、active-shell adoption decision、release owner receipt 或

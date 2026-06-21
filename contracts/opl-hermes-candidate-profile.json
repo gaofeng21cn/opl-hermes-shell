@@ -106,6 +106,94 @@
       "typed_blocker": false
     }
   },
+  "operator_functional_surface_readback": {
+    "surface_kind": "opl_hermes_candidate_operator_functional_surface_readback",
+    "schema_version": "opl-hermes-operator-functional-surface-readback.v1",
+    "readback_command_ref": "npm run validate:candidate",
+    "state": "ordinary_operator_candidate_surface_available_not_active_shell",
+    "gateway_scope_ref": "electron/opl-codex-gateway.cjs#describeOplCodexGatewayScope",
+    "required_operator_surfaces": [
+      {
+        "surface_id": "domain_skill_catalog",
+        "source": "gateway_scope.codexSkills",
+        "required_skill_ids": [
+          "mas",
+          "mag",
+          "rca",
+          "opl"
+        ],
+        "required_rest_routes": [
+          "GET /api/opl/codex-skills"
+        ],
+        "required_rpc_methods": [
+          "codex.skills"
+        ],
+        "gui_executes_domain_commands": false,
+        "creates_second_truth_source": false
+      },
+      {
+        "surface_id": "ordinary_session_prompt_path",
+        "source": "gateway_scope.rpcMethods",
+        "required_rpc_methods": [
+          "session.create",
+          "prompt.submit"
+        ],
+        "codex_runtime_methods": [
+          "thread/start",
+          "turn/start"
+        ],
+        "prompt_submit_ack_boundary": "ack_before_codex_turn_completion"
+      },
+      {
+        "surface_id": "operator_settings_and_model_access",
+        "source": "gateway_scope.restRoutes",
+        "required_rest_routes": [
+          "GET /api/model/options",
+          "GET /api/model/auxiliary",
+          "GET /api/providers/oauth",
+          "GET /api/profiles",
+          "GET /api/config",
+          "PUT /api/config",
+          "GET /api/env",
+          "PUT /api/env"
+        ],
+        "required_rpc_methods": [
+          "config.get",
+          "config.set"
+        ],
+        "ordinary_provider_surface": "gflabtoken_only"
+      },
+      {
+        "surface_id": "composer_affordances",
+        "source": "gateway_scope.rpcMethods",
+        "required_rpc_methods": [
+          "commands.catalog",
+          "complete.slash",
+          "complete.path",
+          "file.attach",
+          "image.attach"
+        ],
+        "required_slash_commands": [
+          "/mas",
+          "/mag",
+          "/rca"
+        ]
+      }
+    ],
+    "can_claim": {
+      "active_shell_adopted": false,
+      "app_release_ready": false,
+      "production_ready": false,
+      "live_user_path": false,
+      "packaged_gui_acceptance": false,
+      "app_contract_replacement": false,
+      "owner_receipt": false,
+      "typed_blocker": false,
+      "domain_truth": false,
+      "domain_route_authority": false,
+      "app_operator_sustained_consumption": false
+    }
+  },
   "validation_profile": {
     "default_command": "npm run validate:candidate",
     "packaged_candidate_command": "npm run validate:candidate -- --require-app",
