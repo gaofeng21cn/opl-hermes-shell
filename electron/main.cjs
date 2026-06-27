@@ -48,6 +48,7 @@ const { worktreesForIpc } = require('./git-worktrees.cjs')
 const { createLinkTitleFetcher } = require('./parts/link-title.cjs')
 const { createMediaPreviewController } = require('./parts/media-preview.cjs')
 const { createExternalOpener } = require('./parts/open-external.cjs')
+const { createWindowAppearanceController } = require('./parts/window-appearance.cjs')
 const { seedOplHermesDefaults } = require('./opl-defaults.cjs')
 const { OFFICIAL_REPO_HTTPS_URL, isOfficialSshRemote } = require('./update-remote.cjs')
 const {
@@ -379,134 +380,20 @@ const APP_ICON_PATHS = [
   path.join(unpackedPathFor(APP_ROOT), 'dist', 'apple-touch-icon.png')
 ]
 
-let rendererTitleBarTheme = null
 const terminalSessions = new Map()
 
-// Force the NATIVE window appearance (vibrancy material, titlebar, the
-// pre-first-paint window background) to follow the APP theme instead of the
-// OS appearance. With `vibrancy` set, macOS paints an NSVisualEffectView that
-// tracks the window's effective appearance and ignores `backgroundColor` —
-// so a dark-themed app on a light-mode Mac flashes a white material on every
-// new window until the renderer covers it. The renderer reports its mode via
-// 'hermes:native-theme' ('dark' | 'light' | 'system'); we pin
-// nativeTheme.themeSource to it and persist the value so cold launches paint
-// correctly before the renderer has even loaded.
-const NATIVE_THEME_CONFIG_PATH = path.join(app.getPath('userData'), 'native-theme.json')
-const THEME_SOURCES = new Set(['dark', 'light', 'system'])
-
-function readPersistedThemeSource() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(NATIVE_THEME_CONFIG_PATH, 'utf8'))
-
-    if (parsed && THEME_SOURCES.has(parsed.themeSource)) {
-      return parsed.themeSource
-    }
-  } catch {
-    // Missing / malformed → follow the OS like a fresh install.
-  }
-
-  return 'system'
-}
-
-function writePersistedThemeSource(mode) {
-  try {
-    fs.mkdirSync(path.dirname(NATIVE_THEME_CONFIG_PATH), { recursive: true })
-    fs.writeFileSync(NATIVE_THEME_CONFIG_PATH, JSON.stringify({ themeSource: mode }, null, 2), 'utf8')
-  } catch (error) {
-    rememberLog(`[theme] write native theme failed: ${error.message}`)
-  }
-}
-
-nativeTheme.themeSource = readPersistedThemeSource()
-
-// Window translucency (see-through window). One lever, 0–100; 0 = off (the
-// default). Mapped to the native window opacity so the desktop shows through
-// the whole window. Persisted so a cold launch applies it at window creation,
-// before the renderer reports its value. macOS + Windows only; `setOpacity` is
-// a no-op on Linux. See store/translucency.
-const TRANSLUCENCY_CONFIG_PATH = path.join(app.getPath('userData'), 'translucency.json')
-
-function clampIntensity(value) {
-  const n = Math.round(Number(value))
-
-  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0
-}
-
-function readPersistedTranslucency() {
-  try {
-    return clampIntensity(JSON.parse(fs.readFileSync(TRANSLUCENCY_CONFIG_PATH, 'utf8')).intensity)
-  } catch {
-    return 0
-  }
-}
-
-function writePersistedTranslucency(intensity) {
-  try {
-    fs.mkdirSync(path.dirname(TRANSLUCENCY_CONFIG_PATH), { recursive: true })
-    fs.writeFileSync(TRANSLUCENCY_CONFIG_PATH, JSON.stringify({ intensity }, null, 2), 'utf8')
-  } catch (error) {
-    rememberLog(`[translucency] write failed: ${error.message}`)
-  }
-}
-
-let translucencyIntensity = readPersistedTranslucency()
-
-// Map the 0–100 lever to a window opacity. Floor at 0.3 so the most see-through
-// setting is still usable rather than nearly invisible. 0 → fully opaque.
-function windowOpacity() {
-  return 1 - (translucencyIntensity / 100) * 0.7
-}
-
-// Re-apply translucency to a live window (runtime toggle, no recreation).
-// `setOpacity` is a no-op on Linux, which is fine — it just stays opaque there.
-function applyWindowTranslucency(win) {
-  if (!win || win.isDestroyed() || typeof win.setOpacity !== 'function') {
-    return
-  }
-
-  try {
-    win.setOpacity(windowOpacity())
-  } catch (error) {
-    rememberLog(`[translucency] apply failed: ${error.message}`)
-  }
-}
-
-function isHexColor(value) {
-  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
-}
-
-// Background color to paint a window with BEFORE its renderer loads, so a new
-// (or reopened) window doesn't flash white/light in dark mode. Prefer the theme
-// the renderer last reported; fall back to the OS preference on first launch.
-function getWindowBackgroundColor() {
-  if (rendererTitleBarTheme && isHexColor(rendererTitleBarTheme.background)) {
-    return rendererTitleBarTheme.background
-  }
-
-  return nativeTheme.shouldUseDarkColors ? '#111111' : '#f7f7f7'
-}
-
-function getTitleBarOverlayOptions() {
-  if (IS_MAC) {
-    return { height: TITLEBAR_HEIGHT }
-  }
-
-  if (rendererTitleBarTheme) {
-    return {
-      color: rendererTitleBarTheme.background,
-      height: TITLEBAR_HEIGHT,
-      symbolColor: rendererTitleBarTheme.foreground
-    }
-  }
-
-  const useDarkColors = nativeTheme.shouldUseDarkColors
-
-  return {
-    color: useDarkColors ? '#111111' : '#f7f7f7',
-    height: TITLEBAR_HEIGHT,
-    symbolColor: useDarkColors ? '#f7f7f7' : '#242424'
-  }
-}
+const windowAppearance = createWindowAppearanceController({
+  app,
+  BrowserWindow,
+  isMac: IS_MAC,
+  nativeTheme,
+  rememberLog,
+  titlebarHeight: TITLEBAR_HEIGHT
+})
+windowAppearance.initialize()
+const getTitleBarOverlayOptions = windowAppearance.getTitleBarOverlayOptions
+const getWindowBackgroundColor = windowAppearance.getWindowBackgroundColor
+const windowOpacity = windowAppearance.windowOpacity
 
 app.setName(APP_NAME)
 // Seed the native About panel with the live Hermes version. This is refreshed
@@ -5196,44 +5083,18 @@ ipcMain.handle('hermes:watchPreviewFile', (_event, url) => mediaPreview.watchPre
 ipcMain.handle('hermes:stopPreviewFileWatch', (_event, id) => mediaPreview.stopPreviewFileWatch(String(id || '')))
 
 ipcMain.on('hermes:titlebar-theme', (_event, payload) => {
-  if (!payload || !isHexColor(payload.background) || !isHexColor(payload.foreground)) {
-    return
-  }
-
-  rendererTitleBarTheme = {
-    background: payload.background,
-    foreground: payload.foreground
-  }
-  mainWindow?.setTitleBarOverlay?.(getTitleBarOverlayOptions())
+  windowAppearance.setTitleBarTheme(payload, mainWindow)
 })
 
-// Pin the native appearance to the app theme (see NATIVE_THEME_CONFIG_PATH).
+// Pin the native appearance to the app theme.
 ipcMain.on('hermes:native-theme', (_event, mode) => {
-  if (!THEME_SOURCES.has(mode)) {
-    return
-  }
-
-  if (nativeTheme.themeSource !== mode) {
-    nativeTheme.themeSource = mode
-    writePersistedThemeSource(mode)
-  }
+  windowAppearance.setNativeThemeSource(mode)
 })
 
 // See-through window translucency. Persist + re-apply opacity to every open
 // window at runtime (no recreation, so caching/sessions are untouched).
 ipcMain.on('hermes:translucency', (_event, payload) => {
-  const next = clampIntensity(payload && payload.intensity)
-
-  if (next === translucencyIntensity) {
-    return
-  }
-
-  translucencyIntensity = next
-  writePersistedTranslucency(next)
-
-  for (const win of BrowserWindow.getAllWindows()) {
-    applyWindowTranslucency(win)
-  }
+  windowAppearance.setTranslucency(payload)
 })
 
 ipcMain.handle('hermes:openExternal', (_event, url) => {
