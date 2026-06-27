@@ -25,6 +25,7 @@ function requireHiddenChildOptions(source, needle) {
 test('desktop background child processes opt into hidden Windows consoles', () => {
   const source = readElectronFile('main.cjs')
   const linkTitleSource = readElectronFile(path.join('parts', 'link-title.cjs'))
+  const openExternalSource = readElectronFile(path.join('parts', 'open-external.cjs'))
 
   assert.match(source, /function hiddenWindowsChildOptions\(options = \{\}\)/)
 
@@ -34,6 +35,8 @@ test('desktop background child processes opt into hidden Windows consoles', () =
   requireHiddenChildOptions(source, "execFileSync('taskkill'")
   requireHiddenChildOptions(source, 'child = spawn(\n        command')
   requireHiddenChildOptions(linkTitleSource, "spawn('curl'")
+  assert.match(openExternalSource, /spawn\('cmd\.exe', \['\/c', 'start'/)
+  assert.match(openExternalSource, /windowsHide: true/)
   requireHiddenChildOptions(source, 'spawn(\n    backend.command,\n    backend.args')
   requireHiddenChildOptions(source, 'hermesProcess = spawn(\n      backend.command,\n      backend.args')
   requireHiddenChildOptions(
@@ -50,7 +53,6 @@ test('intentional or interactive desktop child processes stay documented', () =>
   assert.match(source, /'--repair', '--branch'/)
   assert.match(source, /'--update', '--branch'/)
   assert.match(source, /nodePty\.spawn\(command, args/)
-  assert.match(source, /spawn\('cmd\.exe', \['\/c', 'start'/)
 })
 
 test('bootstrap PowerShell runner hides Windows console children', () => {
