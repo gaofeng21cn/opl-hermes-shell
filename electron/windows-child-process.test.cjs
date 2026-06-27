@@ -24,6 +24,7 @@ function requireHiddenChildOptions(source, needle) {
 
 test('desktop background child processes opt into hidden Windows consoles', () => {
   const source = readElectronFile('main.cjs')
+  const linkTitleSource = readElectronFile(path.join('parts', 'link-title.cjs'))
 
   assert.match(source, /function hiddenWindowsChildOptions\(options = \{\}\)/)
 
@@ -32,10 +33,13 @@ test('desktop background child processes opt into hidden Windows consoles', () =
   requireHiddenChildOptions(source, 'spawn(\n      resolveGitBinary()')
   requireHiddenChildOptions(source, "execFileSync('taskkill'")
   requireHiddenChildOptions(source, 'child = spawn(\n        command')
-  requireHiddenChildOptions(source, "spawn('curl'")
+  requireHiddenChildOptions(linkTitleSource, "spawn('curl'")
   requireHiddenChildOptions(source, 'spawn(\n    backend.command,\n    backend.args')
   requireHiddenChildOptions(source, 'hermesProcess = spawn(\n      backend.command,\n      backend.args')
-  requireHiddenChildOptions(source, "spawn(\n        py,\n        ['-m', 'hermes_cli.main', 'uninstall', '--gui-summary']")
+  requireHiddenChildOptions(
+    source,
+    "spawn(\n        py,\n        ['-m', 'hermes_cli.main', 'uninstall', '--gui-summary']"
+  )
 })
 
 test('intentional or interactive desktop child processes stay documented', () => {

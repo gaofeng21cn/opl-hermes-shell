@@ -20,7 +20,6 @@ const crypto = require('node:crypto')
 const fs = require('node:fs')
 const http = require('node:http')
 const https = require('node:https')
-const net = require('node:net')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { execFileSync, spawn } = require('node:child_process')
@@ -46,6 +45,7 @@ const { readWindowsUserEnvVar } = require('./windows-user-env.cjs')
 const { readDirForIpc } = require('./fs-read-dir.cjs')
 const { gitRootForIpc } = require('./git-root.cjs')
 const { worktreesForIpc } = require('./git-worktrees.cjs')
+const { createLinkTitleFetcher } = require('./parts/link-title.cjs')
 const { seedOplHermesDefaults } = require('./opl-defaults.cjs')
 const { OFFICIAL_REPO_HTTPS_URL, isOfficialSshRemote } = require('./update-remote.cjs')
 const {
@@ -132,6 +132,8 @@ function hiddenWindowsChildOptions(options = {}) {
   }
   return { ...options, windowsHide: true }
 }
+
+const fetchLinkTitle = createLinkTitleFetcher({ app, BrowserWindow, session, hiddenWindowsChildOptions })
 
 function oplDefaultLanguage() {
   const locale = (app.getLocale && app.getLocale()) || process.env.LANG || 'en-US'
@@ -1010,7 +1012,13 @@ function broadcastBootstrapEvent(ev) {
     bootstrapState.startedAt = bootstrapState.startedAt || Date.now()
     bootstrapState.stages = {}
     for (const stage of ev.stages || []) {
-      bootstrapState.stages[stage.name] = { state: 'pending', json: null, durationMs: null, error: null, startedAt: null }
+      bootstrapState.stages[stage.name] = {
+        state: 'pending',
+        json: null,
+        durationMs: null,
+        error: null,
+        startedAt: null
+      }
     }
   } else if (ev.type === 'stage') {
     const prev = bootstrapState.stages[ev.name]
@@ -1899,7 +1907,9 @@ async function handOffWindowsBootstrapRecovery(reason) {
   })
   child.unref()
 
-  rememberLog(`[bootstrap] handed off ${reason} recovery to updater: ${updater} ${updaterArgs.join(' ')}; exiting desktop to release app.asar`)
+  rememberLog(
+    `[bootstrap] handed off ${reason} recovery to updater: ${updater} ${updaterArgs.join(' ')}; exiting desktop to release app.asar`
+  )
   setTimeout(() => {
     app.quit()
   }, 600)
@@ -2493,7 +2503,9 @@ async function ensureRuntime(backend) {
   }
 
   if (OPL_CODEX_CANDIDATE && backend.kind === 'bootstrap-needed') {
-    rememberLog('[opl-bootstrap] no Hermes runtime found; running OPL App initialization instead of Hermes Agent install')
+    rememberLog(
+      '[opl-bootstrap] no Hermes runtime found; running OPL App initialization instead of Hermes Agent install'
+    )
 
     bootstrapAbortController = new AbortController()
     const result = await runOplBootstrap({
@@ -2519,7 +2531,9 @@ async function ensureRuntime(backend) {
 
     if (result.cancelled) {
       const deferred = buildUserDeferredBootstrap({ markerPath: OPL_STARTUP_MARKER_PATH })
-      rememberLog('[opl-bootstrap] user skipped first-run preparation; starting Codex adapter and deferring OPL maintenance')
+      rememberLog(
+        '[opl-bootstrap] user skipped first-run preparation; starting Codex adapter and deferring OPL maintenance'
+      )
       broadcastBootstrapEvent({
         type: 'deferred',
         reason: 'user_skipped_first_run_preparation',
@@ -2569,7 +2583,9 @@ async function ensureRuntime(backend) {
     rememberLog('[bootstrap] no Hermes install found; starting first-launch bootstrap')
 
     if (await handOffWindowsBootstrapRecovery('bootstrap-needed')) {
-      const handoffError = new Error('Hermes recovery was handed off to Hermes Setup. The desktop will restart when recovery completes.')
+      const handoffError = new Error(
+        'Hermes recovery was handed off to Hermes Setup. The desktop will restart when recovery completes.'
+      )
       handoffError.isBootstrapFailure = true
       handoffError.bootstrapHandedOff = true
       bootstrapFailure = handoffError
@@ -2704,7 +2720,6 @@ async function ensureRuntime(backend) {
   })
   return backend
 }
-
 
 function fetchJson(url, token, options = {}) {
   return new Promise((resolve, reject) => {
@@ -2879,245 +2894,7 @@ function filenameFromUrl(rawUrl, fallback = 'image') {
   }
 }
 
-// Link title resolution — curl (tier 1) → hidden BrowserWindow (tier 2).
-const titleCache = new Map()
-const titleInflight = new Map()
-const TITLE_CACHE_LIMIT = 500
-const TITLE_BYTE_BUDGET = 96 * 1024
-const TITLE_TIMEOUT_MS = 5000
-const TITLE_MAX_REDIRECTS = 3
-// Browser-shaped UA — many bot-walled sites (GetYourGuide, Cloudflare-protected
-// pages) refuse anything that doesn't look like a real Chrome.
-const TITLE_USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
-const TITLE_ERROR_RE =
-  /\b(access denied|attention required|captcha|error|forbidden|just a moment|request blocked|too many requests)\b/i
-const HTML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" }
-
-// Tier-2 renderer fallback config. Only invoked when curl came back empty or
-// matched TITLE_ERROR_RE — keeps cold/CDN-cached pages on the cheap path.
-const RENDER_TITLE_MAX_CONCURRENT = 2
-const RENDER_TITLE_TIMEOUT_MS = 8000
-const RENDER_TITLE_GRACE_MS = 700
-// Resource types we cancel before the network even fires — keeps the hidden
-// renderer fast and cuts third-party tracking noise.
-const RENDER_TITLE_BLOCKED_RESOURCES = new Set([
-  'cspReport',
-  'font',
-  'imageset',
-  'media',
-  'object',
-  'ping',
-  'stylesheet'
-])
-
-let linkTitleSession = null
 let oauthSession = null
-let renderTitleInFlight = 0
-const renderTitleQueue = []
-
-function canonicalTitleCacheKey(rawUrl) {
-  const value = String(rawUrl || '').trim()
-  if (!value) return ''
-
-  try {
-    const url = new URL(value)
-    const host = url.hostname.replace(/^www\./i, '').toLowerCase()
-    const pathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/+$/, '') || '/'
-
-    return `${host}${pathname}${url.search || ''}`
-  } catch {
-    return value
-  }
-}
-
-function cacheTitle(key, title) {
-  if (titleCache.size >= TITLE_CACHE_LIMIT) titleCache.delete(titleCache.keys().next().value)
-  titleCache.set(key, title)
-}
-
-function decodeHtmlEntities(value) {
-  return value
-    .replace(/&(amp|lt|gt|quot|apos|nbsp|#39);/gi, (_, k) => HTML_ENTITIES[k.toLowerCase()] ?? '')
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16) || 32))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10) || 32))
-}
-
-function parseHtmlTitle(html) {
-  const raw = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
-  return raw ? decodeHtmlEntities(raw).replace(/\s+/g, ' ').trim() : ''
-}
-
-function fetchHtmlTitleWithCurl(rawUrl) {
-  return new Promise(resolve => {
-    const url = String(rawUrl || '').trim()
-    if (!url) return resolve('')
-
-    const args = [
-      '--silent',
-      '--show-error',
-      '--location',
-      '--max-redirs',
-      String(TITLE_MAX_REDIRECTS),
-      '--max-time',
-      String(Math.max(2, Math.ceil(TITLE_TIMEOUT_MS / 1000))),
-      '--connect-timeout',
-      '4',
-      '--user-agent',
-      TITLE_USER_AGENT,
-      '--header',
-      'Accept: text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
-      '--header',
-      'Accept-Language: en-US,en;q=0.7',
-      '--header',
-      'Accept-Encoding: identity',
-      '--raw',
-      url
-    ]
-    const child = spawn('curl', args, hiddenWindowsChildOptions({ stdio: ['ignore', 'pipe', 'ignore'] }))
-    const chunks = []
-    let bytes = 0
-
-    child.stdout.on('data', chunk => {
-      if (bytes >= TITLE_BYTE_BUDGET) return
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-      const remaining = TITLE_BYTE_BUDGET - bytes
-      const next = buffer.length > remaining ? buffer.subarray(0, remaining) : buffer
-      chunks.push(next)
-      bytes += next.length
-    })
-
-    child.on('error', () => resolve(''))
-    child.on('close', () => {
-      if (!chunks.length) return resolve('')
-      resolve(parseHtmlTitle(Buffer.concat(chunks).toString('utf8')))
-    })
-  })
-}
-
-function getLinkTitleSession() {
-  if (linkTitleSession || !app.isReady()) return linkTitleSession
-  linkTitleSession = session.fromPartition('hermes:link-titles', { cache: false })
-  linkTitleSession.webRequest.onBeforeRequest((details, callback) => {
-    callback({ cancel: RENDER_TITLE_BLOCKED_RESOURCES.has(details.resourceType) })
-  })
-  return linkTitleSession
-}
-
-function dequeueRenderTitle() {
-  while (renderTitleInFlight < RENDER_TITLE_MAX_CONCURRENT && renderTitleQueue.length) {
-    const item = renderTitleQueue.shift()
-    renderTitleInFlight += 1
-    runRenderTitleJob(item.url).then(title => {
-      renderTitleInFlight -= 1
-      item.resolve(title)
-      dequeueRenderTitle()
-    })
-  }
-}
-
-function runRenderTitleJob(rawUrl) {
-  return new Promise(resolve => {
-    if (!app.isReady()) return resolve('')
-
-    const partitionSession = getLinkTitleSession()
-    if (!partitionSession) return resolve('')
-
-    let settled = false
-    let window = null
-    let hardTimer = null
-    let graceTimer = null
-
-    const finish = title => {
-      if (settled) return
-      settled = true
-      if (hardTimer) clearTimeout(hardTimer)
-      if (graceTimer) clearTimeout(graceTimer)
-      const value = (title || '').replace(/\s+/g, ' ').trim()
-      try {
-        if (window && !window.isDestroyed()) window.destroy()
-      } catch {
-        // BrowserWindow may already be torn down; ignore.
-      }
-      resolve(value)
-    }
-
-    try {
-      window = new BrowserWindow({
-        show: false,
-        width: 1280,
-        height: 800,
-        webPreferences: {
-          backgroundThrottling: false,
-          contextIsolation: true,
-          javascript: true,
-          nodeIntegration: false,
-          sandbox: true,
-          session: partitionSession,
-          webSecurity: true
-        }
-      })
-    } catch {
-      return finish('')
-    }
-
-    const readTitle = () => window?.webContents?.getTitle?.() || ''
-    const scheduleGrace = () => {
-      if (graceTimer) clearTimeout(graceTimer)
-      graceTimer = setTimeout(() => finish(readTitle()), RENDER_TITLE_GRACE_MS)
-    }
-
-    hardTimer = setTimeout(() => finish(readTitle()), RENDER_TITLE_TIMEOUT_MS)
-
-    window.webContents.setUserAgent(TITLE_USER_AGENT)
-    window.webContents.on('page-title-updated', scheduleGrace)
-    window.webContents.on('did-finish-load', scheduleGrace)
-    window.webContents.on('did-fail-load', (_event, _code, _desc, _validatedURL, isMainFrame) => {
-      if (isMainFrame) finish('')
-    })
-
-    window
-      .loadURL(rawUrl, {
-        httpReferrer: 'https://www.google.com/',
-        userAgent: TITLE_USER_AGENT
-      })
-      .catch(() => finish(''))
-  })
-}
-
-function fetchHtmlTitleWithRenderer(rawUrl) {
-  return new Promise(resolve => {
-    renderTitleQueue.push({ resolve, url: rawUrl })
-    dequeueRenderTitle()
-  })
-}
-
-// Strips known error/captcha titles (e.g. "GetYourGuide – Error", "Just a
-// moment...") so they don't get cached as the resolved title.
-const usableTitle = value => (value && !TITLE_ERROR_RE.test(value) ? value : '')
-
-function fetchLinkTitle(rawUrl) {
-  const url = String(rawUrl || '').trim()
-  const key = canonicalTitleCacheKey(url)
-  if (!key) return Promise.resolve('')
-  if (titleCache.has(key)) return Promise.resolve(titleCache.get(key))
-  if (titleInflight.has(key)) return titleInflight.get(key)
-
-  const pending = fetchHtmlTitleWithCurl(url)
-    .catch(() => '')
-    .then(value => usableTitle((value || '').slice(0, 240)))
-    .then(
-      async value => value || usableTitle(((await fetchHtmlTitleWithRenderer(url).catch(() => '')) || '').slice(0, 240))
-    )
-    .then(clean => {
-      cacheTitle(key, clean)
-      titleInflight.delete(key)
-      return clean
-    })
-
-  titleInflight.set(key, pending)
-  return pending
-}
 
 async function resourceBufferFromUrl(rawUrl) {
   if (!rawUrl) throw new Error('Missing URL')
@@ -4671,7 +4448,9 @@ function startOplMaintenanceInBackground() {
       return result
     })
     .catch(error => {
-      rememberLog(`[opl-maintenance] ${JSON.stringify({ type: 'failed', error: error instanceof Error ? error.message : String(error) })}`)
+      rememberLog(
+        `[opl-maintenance] ${JSON.stringify({ type: 'failed', error: error instanceof Error ? error.message : String(error) })}`
+      )
       return { ok: true, skipped: true, error: error instanceof Error ? error.message : String(error) }
     })
   return oplMaintenancePromise
