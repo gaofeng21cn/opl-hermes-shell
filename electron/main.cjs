@@ -49,6 +49,7 @@ const { createLinkTitleFetcher } = require('./parts/link-title.cjs')
 const { createMediaPreviewController } = require('./parts/media-preview.cjs')
 const { createExternalOpener } = require('./parts/open-external.cjs')
 const { createWindowAppearanceController } = require('./parts/window-appearance.cjs')
+const { createWindowZoomController } = require('./parts/window-zoom.cjs')
 const { createDesktopLogController } = require('./parts/desktop-log.cjs')
 const { createTerminalShellController } = require('./parts/terminal-shell.cjs')
 const { seedOplHermesDefaults } = require('./opl-defaults.cjs')
@@ -448,6 +449,11 @@ const desktopLog = createDesktopLogController({
 const rememberLog = desktopLog.remember
 
 const openExternalUrl = createExternalOpener({ isWsl: IS_WSL, rememberLog, shell })
+const {
+  installZoomShortcuts,
+  restorePersistedZoomLevel,
+  setAndPersistZoomLevel
+} = createWindowZoomController({ isMac: IS_MAC, rememberLog })
 const terminalShell = createTerminalShellController({ app, findOnPath, isWindows: IS_WINDOWS, nodePtyDir })
 
 function ensureWslWindowsFonts() {
@@ -2644,66 +2650,6 @@ function installPreviewShortcut(window) {
 
     event.preventDefault()
     sendClosePreviewRequested()
-  })
-}
-
-// Zoom level is persisted in the renderer's own localStorage (per-origin,
-// survives reloads/restarts) rather than a main-process JSON file. The main
-// process owns setZoomLevel, so we mirror each change into localStorage and
-// read it back on did-finish-load to re-apply after reloads or crash recovery.
-const ZOOM_STORAGE_KEY = 'hermes:desktop:zoomLevel'
-
-function clampZoomLevel(value) {
-  if (!Number.isFinite(value)) return 0
-  return Math.min(Math.max(value, -9), 9)
-}
-
-function setAndPersistZoomLevel(window, zoomLevel) {
-  if (!window || window.isDestroyed()) return
-  const next = clampZoomLevel(zoomLevel)
-  window.webContents.setZoomLevel(next)
-  window.webContents
-    .executeJavaScript(
-      `try { localStorage.setItem(${JSON.stringify(ZOOM_STORAGE_KEY)}, ${JSON.stringify(String(next))}) } catch {}`
-    )
-    .catch(error => rememberLog(`[zoom] persist failed: ${error?.message || error}`))
-}
-
-function restorePersistedZoomLevel(window) {
-  if (!window || window.isDestroyed()) return
-  window.webContents
-    .executeJavaScript(
-      `(() => { try { return localStorage.getItem(${JSON.stringify(ZOOM_STORAGE_KEY)}) } catch { return null } })()`
-    )
-    .then(stored => {
-      if (stored == null || !window || window.isDestroyed()) return
-      const level = clampZoomLevel(Number(stored))
-      window.webContents.setZoomLevel(level)
-    })
-    .catch(error => rememberLog(`[zoom] restore failed: ${error?.message || error}`))
-}
-
-function installZoomShortcuts(window) {
-  // Override Ctrl/Cmd + +/-/0 with half the default zoom step (0.1 vs 0.2).
-  // The menu items handle this on macOS (where the menu is always present),
-  // but on Linux/Windows the menu is null and Chromium's default handler
-  // would use the full 0.2 step, so we intercept here for consistency.
-  const ZOOM_STEP = 0.1
-  window.webContents.on('before-input-event', (event, input) => {
-    const mod = IS_MAC ? input.meta : input.control
-    if (!mod || input.alt || input.shift) return
-
-    const key = input.key
-    if (key === '0') {
-      event.preventDefault()
-      setAndPersistZoomLevel(window, 0)
-    } else if (key === '=' || key === '+') {
-      event.preventDefault()
-      setAndPersistZoomLevel(window, window.webContents.getZoomLevel() + ZOOM_STEP)
-    } else if (key === '-') {
-      event.preventDefault()
-      setAndPersistZoomLevel(window, window.webContents.getZoomLevel() - ZOOM_STEP)
-    }
   })
 }
 
