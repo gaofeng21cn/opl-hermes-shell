@@ -20,6 +20,7 @@ const crypto = require('node:crypto')
 const fs = require('node:fs')
 const http = require('node:http')
 const https = require('node:https')
+const net = require('node:net')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { execFileSync, spawn } = require('node:child_process')
@@ -45,15 +46,6 @@ const { readWindowsUserEnvVar } = require('./windows-user-env.cjs')
 const { readDirForIpc } = require('./fs-read-dir.cjs')
 const { gitRootForIpc } = require('./git-root.cjs')
 const { worktreesForIpc } = require('./git-worktrees.cjs')
-const { createLinkTitleFetcher } = require('./parts/link-title.cjs')
-const { createMediaPreviewController } = require('./parts/media-preview.cjs')
-const { createExternalOpener } = require('./parts/open-external.cjs')
-const { createWindowAppearanceController } = require('./parts/window-appearance.cjs')
-const { createWindowZoomController } = require('./parts/window-zoom.cjs')
-const { createWindowStateController } = require('./parts/window-state.cjs')
-const { createDesktopLogController } = require('./parts/desktop-log.cjs')
-const { createTerminalShellController } = require('./parts/terminal-shell.cjs')
-const { loadInstallStamp } = require('./parts/install-stamp.cjs')
 const { seedOplHermesDefaults } = require('./opl-defaults.cjs')
 const { OFFICIAL_REPO_HTTPS_URL, isOfficialSshRemote } = require('./update-remote.cjs')
 const {
@@ -82,8 +74,12 @@ const {
   tokenPreview
 } = require('./connection-config.cjs')
 const {
+  DATA_URL_READ_MAX_BYTES,
   DEFAULT_FETCH_TIMEOUT_MS,
+  TEXT_PREVIEW_SOURCE_MAX_BYTES,
   encryptDesktopSecret: encryptDesktopSecretStrict,
+  resolveReadableFileForIpc,
+  resolveRequestedPathForIpc,
   resolveTimeoutMs
 } = require('./hardening.cjs')
 
@@ -137,20 +133,6 @@ function hiddenWindowsChildOptions(options = {}) {
   return { ...options, windowsHide: true }
 }
 
-const fetchLinkTitle = createLinkTitleFetcher({ app, BrowserWindow, session, hiddenWindowsChildOptions })
-const mediaPreview = createMediaPreviewController({
-  app,
-  clipboard,
-  dialog,
-  electronNet,
-  getMainWindow: () => mainWindow,
-  nativeImage,
-  protocol,
-  directoryExists,
-  fileExists,
-  resolveDefaultPreviewCwd: () => resolveHermesCwd()
-})
-
 function oplDefaultLanguage() {
   const locale = (app.getLocale && app.getLocale()) || process.env.LANG || 'en-US'
   const normalized = String(locale).trim().toLowerCase().replace(/_/g, '-')
@@ -196,10 +178,54 @@ const SOURCE_REPO_ROOT = APP_ROOT
 // Build-time install stamp -- the git ref this .exe was built against.
 //
 // Written by apps/desktop/scripts/write-build-stamp.cjs during `npm run build`
-// and bundled into packaged apps via electron-builder's extraResources entry.
-// Missing or invalid stamps are normal in dev; packaged builds surface a
-// warning below because bootstrap then lacks a pinned ref to install.
-const INSTALL_STAMP = loadInstallStamp({ appRoot: APP_ROOT })
+// and bundled into packaged apps via electron-builder's extraResources entry,
+// so the runtime stamp ends up at process.resourcesPath/install-stamp.json
+// after install. The bootstrap runner (Phase 1D) reads it to know which
+// commit to clone when running install.ps1 stages at first launch.
+//
+// Returns null when the file is missing (dev runs from a checkout where
+// build hasn't been invoked, or schema mismatch). Callers must handle null.
+//
+// Schema:
+//   { schemaVersion: 1, commit, branch, builtAt, dirty, source }
+const INSTALL_STAMP_SCHEMA_VERSION = 1
+function loadInstallStamp() {
+  // Try packaged location first (resources/install-stamp.json), then the
+  // dev/local build output (apps/desktop/build/install-stamp.json) so
+  // someone running `npm run start` after a local `npm run build` also
+  // sees a stamp without needing a packaged build.
+  const candidates = [
+    process.resourcesPath ? path.join(process.resourcesPath, 'install-stamp.json') : null,
+    path.join(APP_ROOT, 'build', 'install-stamp.json')
+  ].filter(Boolean)
+  for (const p of candidates) {
+    try {
+      const raw = fs.readFileSync(p, 'utf8')
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && typeof parsed.commit === 'string' && parsed.commit.length >= 7) {
+        if (parsed.schemaVersion !== INSTALL_STAMP_SCHEMA_VERSION) {
+          console.warn(
+            `[hermes] install-stamp.json schemaVersion ${parsed.schemaVersion} != expected ${INSTALL_STAMP_SCHEMA_VERSION}; ignoring`
+          )
+          continue
+        }
+        return Object.freeze({
+          schemaVersion: parsed.schemaVersion,
+          commit: parsed.commit,
+          branch: parsed.branch || null,
+          builtAt: parsed.builtAt || null,
+          dirty: Boolean(parsed.dirty),
+          source: parsed.source || null,
+          path: p
+        })
+      }
+    } catch {
+      // Either ENOENT or malformed JSON; try the next candidate
+    }
+  }
+  return null
+}
+const INSTALL_STAMP = loadInstallStamp()
 if (INSTALL_STAMP) {
   console.log(
     `[hermes] install stamp: ${INSTALL_STAMP.commit.slice(0, 12)}${INSTALL_STAMP.branch ? ` (${INSTALL_STAMP.branch})` : ''}${INSTALL_STAMP.dirty ? ' [DIRTY]' : ''} from ${INSTALL_STAMP.source || 'unknown'}`
@@ -293,6 +319,27 @@ const DEFAULT_UPDATE_BRANCH = 'main'
 // errors.log, gateway.log produced by hermes_logging.setup_logging — one log
 // directory per user, regardless of which UI surface produced the line.
 const DESKTOP_LOG_PATH = path.join(HERMES_HOME, 'logs', 'desktop.log')
+const DESKTOP_LOG_FLUSH_MS = 120
+const DESKTOP_LOG_BUFFER_MAX_CHARS = 64 * 1024
+// Bound desktop.log on disk. It is an append-only forensic log, so a boot loop
+// (version-skew crash -> backend exits instantly -> renderer keeps hitting
+// Retry) appends the full bootstrap transcript every attempt and grows without
+// bound — we have seen it reach ~326 GB and exhaust the disk, which then breaks
+// update/install (no room for git/venv/npm temp files).
+//
+// Mirror the Python logs (hermes_logging.py RotatingFileHandler, maxBytes x
+// backupCount): cascade live -> .1 -> .2 -> .3, drop the oldest. Steady-state
+// stays bounded at ~(backupCount + 1) x cap however hard the app loops.
+//
+// Bounding alone never RECLAIMS an already-huge file: a plain rotation just
+// renames the monster to .1 and strands it for a cycle a healthy app may never
+// reach. A multi-GB boot-loop transcript has no diagnostic value, so anything
+// past the discard ceiling is deleted outright — the updated app self-heals a
+// disk a stale build filled, on the next launch.
+const DESKTOP_LOG_MAX_BYTES = 10 * 1024 * 1024
+const DESKTOP_LOG_BACKUP_COUNT = 3
+const DESKTOP_LOG_DISCARD_BYTES = DESKTOP_LOG_MAX_BYTES * 4
+const desktopLogBackupPath = n => `${DESKTOP_LOG_PATH}.${n}`
 const BOOT_FAKE_MODE = process.env.HERMES_DESKTOP_BOOT_FAKE === '1'
 const BOOT_FAKE_STEP_MS = (() => {
   const raw = Number.parseInt(String(process.env.HERMES_DESKTOP_BOOT_FAKE_STEP_MS || ''), 10)
@@ -320,20 +367,238 @@ const APP_ICON_PATHS = [
   path.join(unpackedPathFor(APP_ROOT), 'dist', 'apple-touch-icon.png')
 ]
 
+let rendererTitleBarTheme = null
 const terminalSessions = new Map()
 
-const windowAppearance = createWindowAppearanceController({
-  app,
-  BrowserWindow,
-  isMac: IS_MAC,
-  nativeTheme,
-  rememberLog,
-  titlebarHeight: TITLEBAR_HEIGHT
-})
-windowAppearance.initialize()
-const getTitleBarOverlayOptions = windowAppearance.getTitleBarOverlayOptions
-const getWindowBackgroundColor = windowAppearance.getWindowBackgroundColor
-const windowOpacity = windowAppearance.windowOpacity
+// Force the NATIVE window appearance (vibrancy material, titlebar, the
+// pre-first-paint window background) to follow the APP theme instead of the
+// OS appearance. With `vibrancy` set, macOS paints an NSVisualEffectView that
+// tracks the window's effective appearance and ignores `backgroundColor` —
+// so a dark-themed app on a light-mode Mac flashes a white material on every
+// new window until the renderer covers it. The renderer reports its mode via
+// 'hermes:native-theme' ('dark' | 'light' | 'system'); we pin
+// nativeTheme.themeSource to it and persist the value so cold launches paint
+// correctly before the renderer has even loaded.
+const NATIVE_THEME_CONFIG_PATH = path.join(app.getPath('userData'), 'native-theme.json')
+const THEME_SOURCES = new Set(['dark', 'light', 'system'])
+
+function readPersistedThemeSource() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(NATIVE_THEME_CONFIG_PATH, 'utf8'))
+
+    if (parsed && THEME_SOURCES.has(parsed.themeSource)) {
+      return parsed.themeSource
+    }
+  } catch {
+    // Missing / malformed → follow the OS like a fresh install.
+  }
+
+  return 'system'
+}
+
+function writePersistedThemeSource(mode) {
+  try {
+    fs.mkdirSync(path.dirname(NATIVE_THEME_CONFIG_PATH), { recursive: true })
+    fs.writeFileSync(NATIVE_THEME_CONFIG_PATH, JSON.stringify({ themeSource: mode }, null, 2), 'utf8')
+  } catch (error) {
+    rememberLog(`[theme] write native theme failed: ${error.message}`)
+  }
+}
+
+nativeTheme.themeSource = readPersistedThemeSource()
+
+// Window translucency (see-through window). One lever, 0–100; 0 = off (the
+// default). Mapped to the native window opacity so the desktop shows through
+// the whole window. Persisted so a cold launch applies it at window creation,
+// before the renderer reports its value. macOS + Windows only; `setOpacity` is
+// a no-op on Linux. See store/translucency.
+const TRANSLUCENCY_CONFIG_PATH = path.join(app.getPath('userData'), 'translucency.json')
+
+function clampIntensity(value) {
+  const n = Math.round(Number(value))
+
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0
+}
+
+function readPersistedTranslucency() {
+  try {
+    return clampIntensity(JSON.parse(fs.readFileSync(TRANSLUCENCY_CONFIG_PATH, 'utf8')).intensity)
+  } catch {
+    return 0
+  }
+}
+
+function writePersistedTranslucency(intensity) {
+  try {
+    fs.mkdirSync(path.dirname(TRANSLUCENCY_CONFIG_PATH), { recursive: true })
+    fs.writeFileSync(TRANSLUCENCY_CONFIG_PATH, JSON.stringify({ intensity }, null, 2), 'utf8')
+  } catch (error) {
+    rememberLog(`[translucency] write failed: ${error.message}`)
+  }
+}
+
+let translucencyIntensity = readPersistedTranslucency()
+
+// Map the 0–100 lever to a window opacity. Floor at 0.3 so the most see-through
+// setting is still usable rather than nearly invisible. 0 → fully opaque.
+function windowOpacity() {
+  return 1 - (translucencyIntensity / 100) * 0.7
+}
+
+// Re-apply translucency to a live window (runtime toggle, no recreation).
+// `setOpacity` is a no-op on Linux, which is fine — it just stays opaque there.
+function applyWindowTranslucency(win) {
+  if (!win || win.isDestroyed() || typeof win.setOpacity !== 'function') {
+    return
+  }
+
+  try {
+    win.setOpacity(windowOpacity())
+  } catch (error) {
+    rememberLog(`[translucency] apply failed: ${error.message}`)
+  }
+}
+
+function isHexColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+}
+
+// Background color to paint a window with BEFORE its renderer loads, so a new
+// (or reopened) window doesn't flash white/light in dark mode. Prefer the theme
+// the renderer last reported; fall back to the OS preference on first launch.
+function getWindowBackgroundColor() {
+  if (rendererTitleBarTheme && isHexColor(rendererTitleBarTheme.background)) {
+    return rendererTitleBarTheme.background
+  }
+
+  return nativeTheme.shouldUseDarkColors ? '#111111' : '#f7f7f7'
+}
+
+function getTitleBarOverlayOptions() {
+  if (IS_MAC) {
+    return { height: TITLEBAR_HEIGHT }
+  }
+
+  if (rendererTitleBarTheme) {
+    return {
+      color: rendererTitleBarTheme.background,
+      height: TITLEBAR_HEIGHT,
+      symbolColor: rendererTitleBarTheme.foreground
+    }
+  }
+
+  const useDarkColors = nativeTheme.shouldUseDarkColors
+
+  return {
+    color: useDarkColors ? '#111111' : '#f7f7f7',
+    height: TITLEBAR_HEIGHT,
+    symbolColor: useDarkColors ? '#f7f7f7' : '#242424'
+  }
+}
+
+const MEDIA_MIME_TYPES = {
+  '.avi': 'video/x-msvideo',
+  '.bmp': 'image/bmp',
+  '.flac': 'audio/flac',
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.m4a': 'audio/mp4',
+  '.mkv': 'video/x-matroska',
+  '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg; codecs=opus',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.wav': 'audio/wav',
+  '.webm': 'video/webm',
+  '.webp': 'image/webp'
+}
+
+const PREVIEW_HTML_EXTENSIONS = new Set(['.html', '.htm'])
+const PREVIEW_WATCH_DEBOUNCE_MS = 120
+const LOCAL_PREVIEW_HOSTS = new Set(['0.0.0.0', '127.0.0.1', '::1', '[::1]', 'localhost'])
+const TEXT_PREVIEW_MAX_BYTES = 512 * 1024
+const PREVIEW_LANGUAGE_BY_EXT = {
+  '.c': 'c',
+  '.conf': 'ini',
+  '.cpp': 'cpp',
+  '.css': 'css',
+  '.csv': 'csv',
+  '.go': 'go',
+  '.graphql': 'graphql',
+  '.h': 'c',
+  '.hpp': 'cpp',
+  '.html': 'html',
+  '.java': 'java',
+  '.js': 'javascript',
+  '.json': 'json',
+  '.jsx': 'jsx',
+  '.kt': 'kotlin',
+  '.lua': 'lua',
+  '.md': 'markdown',
+  '.mjs': 'javascript',
+  '.py': 'python',
+  '.rb': 'ruby',
+  '.rs': 'rust',
+  '.sh': 'shell',
+  '.sql': 'sql',
+  '.svg': 'xml',
+  '.toml': 'toml',
+  '.ts': 'typescript',
+  '.tsx': 'tsx',
+  '.txt': 'text',
+  '.xml': 'xml',
+  '.yaml': 'yaml',
+  '.yml': 'yaml',
+  '.zsh': 'shell'
+}
+
+function looksBinary(buffer) {
+  if (!buffer.length) return false
+
+  let suspicious = 0
+
+  for (const byte of buffer) {
+    if (byte === 0) return true
+    // Allow common whitespace controls: tab, LF, CR.
+    if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) suspicious += 1
+  }
+
+  return suspicious / buffer.length > 0.12
+}
+
+function previewFileMetadata(filePath, mimeType) {
+  let byteSize = 0
+  let binary = false
+
+  try {
+    const stat = fs.statSync(filePath)
+    byteSize = stat.size
+
+    if (!mimeType.startsWith('image/')) {
+      const fd = fs.openSync(filePath, 'r')
+
+      try {
+        const sample = Buffer.alloc(Math.min(byteSize, 4096))
+        const bytesRead = fs.readSync(fd, sample, 0, sample.length, 0)
+        binary = looksBinary(sample.subarray(0, bytesRead))
+      } finally {
+        fs.closeSync(fd)
+      }
+    }
+  } catch {
+    // Metadata is best-effort; the read handlers surface hard errors later.
+  }
+
+  return {
+    binary,
+    byteSize,
+    large: byteSize > TEXT_PREVIEW_MAX_BYTES
+  }
+}
 
 app.setName(APP_NAME)
 // Seed the native About panel with the live Hermes version. This is refreshed
@@ -345,6 +610,66 @@ app.setAboutPanelOptions({
   applicationVersion: resolveHermesVersion(),
   copyright: OPL_CODEX_CANDIDATE ? 'Copyright © 2026 One Person Lab' : 'Copyright © 2026 Nous Research'
 })
+
+// Custom scheme for streaming local media (video/audio) into the renderer.
+// Reading large media through `readFileDataUrl` failed: it base64-loads the
+// whole file into memory and is hard-capped at DATA_URL_READ_MAX_BYTES (16 MB),
+// so any non-trivial video silently refused to load. Streaming via a protocol
+// handler removes the size cap and gives the <video> element seekable,
+// range-aware playback. Must be registered before the app is ready.
+const MEDIA_PROTOCOL = 'hermes-media'
+// Only audio/video may be streamed. Without this the handler would read any
+// non-blocklisted local file (no size cap) for any `fetch(hermes-media://…)`.
+const STREAMABLE_MEDIA_EXTS = new Set([
+  '.avi',
+  '.flac',
+  '.m4a',
+  '.mkv',
+  '.mov',
+  '.mp3',
+  '.mp4',
+  '.ogg',
+  '.opus',
+  '.wav',
+  '.webm'
+])
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: MEDIA_PROTOCOL,
+    privileges: {
+      secure: true,
+      standard: true,
+      stream: true,
+      supportFetchAPI: true
+    }
+  }
+])
+
+function registerMediaProtocol() {
+  protocol.handle(MEDIA_PROTOCOL, async request => {
+    let resolvedPath
+    try {
+      const url = new URL(request.url)
+      const filePath = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
+      ;({ resolvedPath } = await resolveReadableFileForIpc(filePath, { purpose: 'Media stream' }))
+    } catch {
+      return new Response('Media not found', { status: 404 })
+    }
+
+    if (!STREAMABLE_MEDIA_EXTS.has(path.extname(resolvedPath).toLowerCase())) {
+      return new Response('Unsupported media type', { status: 415 })
+    }
+
+    // Delegate to Electron's net stack on a file:// URL — it resolves the
+    // content-type and honors Range requests so seeking works. Forward the
+    // renderer's headers (notably Range) and skip custom-protocol re-entry.
+    return electronNet.fetch(pathToFileURL(resolvedPath).toString(), {
+      bypassCustomProtocolHandlers: true,
+      headers: request.headers
+    })
+  })
+}
 
 let mainWindow = null
 let hermesProcess = null
@@ -388,7 +713,11 @@ let bootstrapAbortController = null
 let connectionConfigCache = null
 let connectionConfigCacheMtime = null
 const hermesLog = []
+const previewWatchers = new Map()
 let previewShortcutActive = false
+let desktopLogBuffer = ''
+let desktopLogFlushTimer = null
+let desktopLogFlushPromise = Promise.resolve()
 let nativeThemeListenerInstalled = false
 let bootProgressState = {
   error: null,
@@ -400,28 +729,193 @@ let bootProgressState = {
   timestamp: Date.now()
 }
 
-const desktopLog = createDesktopLogController({
-  logPath: DESKTOP_LOG_PATH,
-  recentLog: hermesLog
-})
-const rememberLog = desktopLog.remember
+// Pure planner: ordered fs ops to bound a live log of `size`. [] = nothing.
+// Each step is ['rm', path] or ['mv', src, dst]; executed best-effort so a
+// missing chain link never aborts the rest.
+function planDesktopLogRotation(size) {
+  if (size < DESKTOP_LOG_MAX_BYTES) return []
+  const backups = n => Array.from({ length: n }, (_, i) => desktopLogBackupPath(i + 1))
+  // Pathological boot-loop log: reclaim live + every backup outright.
+  if (size > DESKTOP_LOG_DISCARD_BYTES) {
+    return [DESKTOP_LOG_PATH, ...backups(DESKTOP_LOG_BACKUP_COUNT)].map(p => ['rm', p])
+  }
+  // Cascade: drop oldest, shift each up, live -> .1.
+  const ops = [['rm', desktopLogBackupPath(DESKTOP_LOG_BACKUP_COUNT)]]
+  for (let i = DESKTOP_LOG_BACKUP_COUNT - 1; i >= 1; i--) {
+    ops.push(['mv', desktopLogBackupPath(i), desktopLogBackupPath(i + 1)])
+  }
+  ops.push(['mv', DESKTOP_LOG_PATH, desktopLogBackupPath(1)])
+  return ops
+}
 
-const openExternalUrl = createExternalOpener({ isWsl: IS_WSL, rememberLog, shell })
-const {
-  installZoomShortcuts,
-  restorePersistedZoomLevel,
-  setAndPersistZoomLevel
-} = createWindowZoomController({ isMac: IS_MAC, rememberLog })
-const terminalShell = createTerminalShellController({ app, findOnPath, isWindows: IS_WINDOWS, nodePtyDir })
-const {
-  getWindowState,
-  sendWindowStateChanged
-} = createWindowStateController({
-  defaultWindowButtonPosition: WINDOW_BUTTON_POSITION,
-  getMainWindow: () => mainWindow,
-  isMac: IS_MAC,
-  nativeOverlayButtonWidth: NATIVE_OVERLAY_BUTTON_WIDTH
-})
+function rotateDesktopLogIfNeededSync() {
+  let size
+  try {
+    size = fs.statSync(DESKTOP_LOG_PATH).size
+  } catch {
+    return // No live file yet — the append (re)creates it.
+  }
+  for (const [op, src, dst] of planDesktopLogRotation(size)) {
+    try {
+      if (op === 'rm') fs.rmSync(src, { force: true })
+      else fs.renameSync(src, dst)
+    } catch {
+      // Best-effort — logging must never block startup/shutdown.
+    }
+  }
+}
+
+async function rotateDesktopLogIfNeededAsync() {
+  let size
+  try {
+    size = (await fs.promises.stat(DESKTOP_LOG_PATH)).size
+  } catch {
+    return // No live file yet — the append (re)creates it.
+  }
+  for (const [op, src, dst] of planDesktopLogRotation(size)) {
+    try {
+      if (op === 'rm') await fs.promises.rm(src, { force: true })
+      else await fs.promises.rename(src, dst)
+    } catch {
+      // Best-effort — logging must never crash the shell.
+    }
+  }
+}
+
+function flushDesktopLogBufferSync() {
+  if (!desktopLogBuffer) return
+  const chunk = desktopLogBuffer
+  desktopLogBuffer = ''
+
+  try {
+    fs.mkdirSync(path.dirname(DESKTOP_LOG_PATH), { recursive: true })
+    rotateDesktopLogIfNeededSync()
+    fs.appendFileSync(DESKTOP_LOG_PATH, chunk)
+  } catch {
+    // Logging must never block app startup/shutdown.
+  }
+}
+
+function flushDesktopLogBufferAsync() {
+  if (!desktopLogBuffer) return desktopLogFlushPromise
+  const chunk = desktopLogBuffer
+  desktopLogBuffer = ''
+
+  desktopLogFlushPromise = desktopLogFlushPromise
+    .then(async () => {
+      await fs.promises.mkdir(path.dirname(DESKTOP_LOG_PATH), { recursive: true })
+      await rotateDesktopLogIfNeededAsync()
+      await fs.promises.appendFile(DESKTOP_LOG_PATH, chunk)
+    })
+    .catch(() => {
+      // Logging must never crash the desktop shell.
+    })
+
+  return desktopLogFlushPromise
+}
+
+function scheduleDesktopLogFlush() {
+  if (desktopLogFlushTimer) return
+  desktopLogFlushTimer = setTimeout(() => {
+    desktopLogFlushTimer = null
+    void flushDesktopLogBufferAsync()
+  }, DESKTOP_LOG_FLUSH_MS)
+}
+
+function rememberLog(chunk) {
+  const text = String(chunk || '').trim()
+  if (!text) return
+  const lines = text.split(/\r?\n/).map(line => `[hermes] ${line}`)
+  hermesLog.push(...lines)
+  if (hermesLog.length > 300) {
+    hermesLog.splice(0, hermesLog.length - 300)
+  }
+
+  desktopLogBuffer += `${lines.join('\n')}\n`
+
+  if (desktopLogBuffer.length >= DESKTOP_LOG_BUFFER_MAX_CHARS) {
+    if (desktopLogFlushTimer) {
+      clearTimeout(desktopLogFlushTimer)
+      desktopLogFlushTimer = null
+    }
+    void flushDesktopLogBufferAsync()
+
+    return
+  }
+
+  scheduleDesktopLogFlush()
+}
+
+function openExternalUrl(rawUrl) {
+  const raw = String(rawUrl || '').trim()
+  if (!raw) return false
+
+  let parsed
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return false
+  }
+
+  // `file://` URLs come from the artifacts panel (the renderer can't open
+  // them itself because Chromium blocks file:// navigation from the app
+  // origin). Hand them to `shell.openPath`, which dispatches to the OS
+  // file association. If the OS can't open it (`error` is a non-empty
+  // string), fall back to revealing the file in the system file manager.
+  if (parsed.protocol === 'file:') {
+    let localPath
+    try {
+      localPath = resolveRequestedPathForIpc(parsed.toString(), { purpose: 'Open external file' })
+    } catch {
+      return false
+    }
+
+    void shell
+      .openPath(localPath)
+      .then(error => {
+        if (!error) {
+          return
+        }
+
+        rememberLog(`[file] openPath failed: ${error}; revealing in folder instead`)
+
+        try {
+          shell.showItemInFolder(localPath)
+        } catch (revealError) {
+          rememberLog(`[file] showItemInFolder failed: ${revealError.message}`)
+        }
+      })
+      .catch(error => rememberLog(`[file] openPath rejected: ${error.message}`))
+
+    return true
+  }
+
+  if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
+    return false
+  }
+
+  const url = parsed.toString()
+
+  if (IS_WSL) {
+    rememberLog(`[link] opening via WSL→Windows: ${url}`)
+    const proc = spawn('cmd.exe', ['/c', 'start', '""', url], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    })
+    proc.on('error', error => {
+      rememberLog(`[link] cmd.exe start failed: ${error.message}; falling back to xdg-open`)
+      shell.openExternal(url).catch(fallback => rememberLog(`[link] xdg-open failed: ${fallback.message}`))
+    })
+    proc.unref()
+
+    return true
+  }
+
+  shell.openExternal(url).catch(error => rememberLog(`[link] openExternal failed: ${error.message}`))
+
+  return true
+}
 
 function ensureWslWindowsFonts() {
   if (!IS_WSL) return
@@ -516,13 +1010,7 @@ function broadcastBootstrapEvent(ev) {
     bootstrapState.startedAt = bootstrapState.startedAt || Date.now()
     bootstrapState.stages = {}
     for (const stage of ev.stages || []) {
-      bootstrapState.stages[stage.name] = {
-        state: 'pending',
-        json: null,
-        durationMs: null,
-        error: null,
-        startedAt: null
-      }
+      bootstrapState.stages[stage.name] = { state: 'pending', json: null, durationMs: null, error: null, startedAt: null }
     }
   } else if (ev.type === 'stage') {
     const prev = bootstrapState.stages[ev.name]
@@ -1411,9 +1899,7 @@ async function handOffWindowsBootstrapRecovery(reason) {
   })
   child.unref()
 
-  rememberLog(
-    `[bootstrap] handed off ${reason} recovery to updater: ${updater} ${updaterArgs.join(' ')}; exiting desktop to release app.asar`
-  )
+  rememberLog(`[bootstrap] handed off ${reason} recovery to updater: ${updater} ${updaterArgs.join(' ')}; exiting desktop to release app.asar`)
   setTimeout(() => {
     app.quit()
   }, 600)
@@ -2007,9 +2493,7 @@ async function ensureRuntime(backend) {
   }
 
   if (OPL_CODEX_CANDIDATE && backend.kind === 'bootstrap-needed') {
-    rememberLog(
-      '[opl-bootstrap] no Hermes runtime found; running OPL App initialization instead of Hermes Agent install'
-    )
+    rememberLog('[opl-bootstrap] no Hermes runtime found; running OPL App initialization instead of Hermes Agent install')
 
     bootstrapAbortController = new AbortController()
     const result = await runOplBootstrap({
@@ -2035,9 +2519,7 @@ async function ensureRuntime(backend) {
 
     if (result.cancelled) {
       const deferred = buildUserDeferredBootstrap({ markerPath: OPL_STARTUP_MARKER_PATH })
-      rememberLog(
-        '[opl-bootstrap] user skipped first-run preparation; starting Codex adapter and deferring OPL maintenance'
-      )
+      rememberLog('[opl-bootstrap] user skipped first-run preparation; starting Codex adapter and deferring OPL maintenance')
       broadcastBootstrapEvent({
         type: 'deferred',
         reason: 'user_skipped_first_run_preparation',
@@ -2087,9 +2569,7 @@ async function ensureRuntime(backend) {
     rememberLog('[bootstrap] no Hermes install found; starting first-launch bootstrap')
 
     if (await handOffWindowsBootstrapRecovery('bootstrap-needed')) {
-      const handoffError = new Error(
-        'Hermes recovery was handed off to Hermes Setup. The desktop will restart when recovery completes.'
-      )
+      const handoffError = new Error('Hermes recovery was handed off to Hermes Setup. The desktop will restart when recovery completes.')
       handoffError.isBootstrapFailure = true
       handoffError.bootstrapHandedOff = true
       bootstrapFailure = handoffError
@@ -2224,6 +2704,7 @@ async function ensureRuntime(backend) {
   })
   return backend
 }
+
 
 function fetchJson(url, token, options = {}) {
   return new Promise((resolve, reject) => {
@@ -2368,7 +2849,510 @@ function fetchPublicJson(url, options = {}) {
   })
 }
 
+function mimeTypeForPath(filePath) {
+  const ext = path.extname(filePath || '').toLowerCase()
+
+  return MEDIA_MIME_TYPES[ext] || 'application/octet-stream'
+}
+
+function extensionForMimeType(mimeType) {
+  const type = String(mimeType || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase()
+  if (type === 'image/png') return '.png'
+  if (type === 'image/jpeg') return '.jpg'
+  if (type === 'image/gif') return '.gif'
+  if (type === 'image/webp') return '.webp'
+  if (type === 'image/bmp') return '.bmp'
+  if (type === 'image/svg+xml') return '.svg'
+  return ''
+}
+
+function filenameFromUrl(rawUrl, fallback = 'image') {
+  try {
+    const parsed = new URL(rawUrl)
+    const base = path.basename(decodeURIComponent(parsed.pathname || ''))
+    return base && base.includes('.') ? base : fallback
+  } catch {
+    return fallback
+  }
+}
+
+// Link title resolution — curl (tier 1) → hidden BrowserWindow (tier 2).
+const titleCache = new Map()
+const titleInflight = new Map()
+const TITLE_CACHE_LIMIT = 500
+const TITLE_BYTE_BUDGET = 96 * 1024
+const TITLE_TIMEOUT_MS = 5000
+const TITLE_MAX_REDIRECTS = 3
+// Browser-shaped UA — many bot-walled sites (GetYourGuide, Cloudflare-protected
+// pages) refuse anything that doesn't look like a real Chrome.
+const TITLE_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
+const TITLE_ERROR_RE =
+  /\b(access denied|attention required|captcha|error|forbidden|just a moment|request blocked|too many requests)\b/i
+const HTML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" }
+
+// Tier-2 renderer fallback config. Only invoked when curl came back empty or
+// matched TITLE_ERROR_RE — keeps cold/CDN-cached pages on the cheap path.
+const RENDER_TITLE_MAX_CONCURRENT = 2
+const RENDER_TITLE_TIMEOUT_MS = 8000
+const RENDER_TITLE_GRACE_MS = 700
+// Resource types we cancel before the network even fires — keeps the hidden
+// renderer fast and cuts third-party tracking noise.
+const RENDER_TITLE_BLOCKED_RESOURCES = new Set([
+  'cspReport',
+  'font',
+  'imageset',
+  'media',
+  'object',
+  'ping',
+  'stylesheet'
+])
+
+let linkTitleSession = null
 let oauthSession = null
+let renderTitleInFlight = 0
+const renderTitleQueue = []
+
+function canonicalTitleCacheKey(rawUrl) {
+  const value = String(rawUrl || '').trim()
+  if (!value) return ''
+
+  try {
+    const url = new URL(value)
+    const host = url.hostname.replace(/^www\./i, '').toLowerCase()
+    const pathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/+$/, '') || '/'
+
+    return `${host}${pathname}${url.search || ''}`
+  } catch {
+    return value
+  }
+}
+
+function cacheTitle(key, title) {
+  if (titleCache.size >= TITLE_CACHE_LIMIT) titleCache.delete(titleCache.keys().next().value)
+  titleCache.set(key, title)
+}
+
+function decodeHtmlEntities(value) {
+  return value
+    .replace(/&(amp|lt|gt|quot|apos|nbsp|#39);/gi, (_, k) => HTML_ENTITIES[k.toLowerCase()] ?? '')
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16) || 32))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10) || 32))
+}
+
+function parseHtmlTitle(html) {
+  const raw = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+  return raw ? decodeHtmlEntities(raw).replace(/\s+/g, ' ').trim() : ''
+}
+
+function fetchHtmlTitleWithCurl(rawUrl) {
+  return new Promise(resolve => {
+    const url = String(rawUrl || '').trim()
+    if (!url) return resolve('')
+
+    const args = [
+      '--silent',
+      '--show-error',
+      '--location',
+      '--max-redirs',
+      String(TITLE_MAX_REDIRECTS),
+      '--max-time',
+      String(Math.max(2, Math.ceil(TITLE_TIMEOUT_MS / 1000))),
+      '--connect-timeout',
+      '4',
+      '--user-agent',
+      TITLE_USER_AGENT,
+      '--header',
+      'Accept: text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
+      '--header',
+      'Accept-Language: en-US,en;q=0.7',
+      '--header',
+      'Accept-Encoding: identity',
+      '--raw',
+      url
+    ]
+    const child = spawn('curl', args, hiddenWindowsChildOptions({ stdio: ['ignore', 'pipe', 'ignore'] }))
+    const chunks = []
+    let bytes = 0
+
+    child.stdout.on('data', chunk => {
+      if (bytes >= TITLE_BYTE_BUDGET) return
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      const remaining = TITLE_BYTE_BUDGET - bytes
+      const next = buffer.length > remaining ? buffer.subarray(0, remaining) : buffer
+      chunks.push(next)
+      bytes += next.length
+    })
+
+    child.on('error', () => resolve(''))
+    child.on('close', () => {
+      if (!chunks.length) return resolve('')
+      resolve(parseHtmlTitle(Buffer.concat(chunks).toString('utf8')))
+    })
+  })
+}
+
+function getLinkTitleSession() {
+  if (linkTitleSession || !app.isReady()) return linkTitleSession
+  linkTitleSession = session.fromPartition('hermes:link-titles', { cache: false })
+  linkTitleSession.webRequest.onBeforeRequest((details, callback) => {
+    callback({ cancel: RENDER_TITLE_BLOCKED_RESOURCES.has(details.resourceType) })
+  })
+  return linkTitleSession
+}
+
+function dequeueRenderTitle() {
+  while (renderTitleInFlight < RENDER_TITLE_MAX_CONCURRENT && renderTitleQueue.length) {
+    const item = renderTitleQueue.shift()
+    renderTitleInFlight += 1
+    runRenderTitleJob(item.url).then(title => {
+      renderTitleInFlight -= 1
+      item.resolve(title)
+      dequeueRenderTitle()
+    })
+  }
+}
+
+function runRenderTitleJob(rawUrl) {
+  return new Promise(resolve => {
+    if (!app.isReady()) return resolve('')
+
+    const partitionSession = getLinkTitleSession()
+    if (!partitionSession) return resolve('')
+
+    let settled = false
+    let window = null
+    let hardTimer = null
+    let graceTimer = null
+
+    const finish = title => {
+      if (settled) return
+      settled = true
+      if (hardTimer) clearTimeout(hardTimer)
+      if (graceTimer) clearTimeout(graceTimer)
+      const value = (title || '').replace(/\s+/g, ' ').trim()
+      try {
+        if (window && !window.isDestroyed()) window.destroy()
+      } catch {
+        // BrowserWindow may already be torn down; ignore.
+      }
+      resolve(value)
+    }
+
+    try {
+      window = new BrowserWindow({
+        show: false,
+        width: 1280,
+        height: 800,
+        webPreferences: {
+          backgroundThrottling: false,
+          contextIsolation: true,
+          javascript: true,
+          nodeIntegration: false,
+          sandbox: true,
+          session: partitionSession,
+          webSecurity: true
+        }
+      })
+    } catch {
+      return finish('')
+    }
+
+    const readTitle = () => window?.webContents?.getTitle?.() || ''
+    const scheduleGrace = () => {
+      if (graceTimer) clearTimeout(graceTimer)
+      graceTimer = setTimeout(() => finish(readTitle()), RENDER_TITLE_GRACE_MS)
+    }
+
+    hardTimer = setTimeout(() => finish(readTitle()), RENDER_TITLE_TIMEOUT_MS)
+
+    window.webContents.setUserAgent(TITLE_USER_AGENT)
+    window.webContents.on('page-title-updated', scheduleGrace)
+    window.webContents.on('did-finish-load', scheduleGrace)
+    window.webContents.on('did-fail-load', (_event, _code, _desc, _validatedURL, isMainFrame) => {
+      if (isMainFrame) finish('')
+    })
+
+    window
+      .loadURL(rawUrl, {
+        httpReferrer: 'https://www.google.com/',
+        userAgent: TITLE_USER_AGENT
+      })
+      .catch(() => finish(''))
+  })
+}
+
+function fetchHtmlTitleWithRenderer(rawUrl) {
+  return new Promise(resolve => {
+    renderTitleQueue.push({ resolve, url: rawUrl })
+    dequeueRenderTitle()
+  })
+}
+
+// Strips known error/captcha titles (e.g. "GetYourGuide – Error", "Just a
+// moment...") so they don't get cached as the resolved title.
+const usableTitle = value => (value && !TITLE_ERROR_RE.test(value) ? value : '')
+
+function fetchLinkTitle(rawUrl) {
+  const url = String(rawUrl || '').trim()
+  const key = canonicalTitleCacheKey(url)
+  if (!key) return Promise.resolve('')
+  if (titleCache.has(key)) return Promise.resolve(titleCache.get(key))
+  if (titleInflight.has(key)) return titleInflight.get(key)
+
+  const pending = fetchHtmlTitleWithCurl(url)
+    .catch(() => '')
+    .then(value => usableTitle((value || '').slice(0, 240)))
+    .then(
+      async value => value || usableTitle(((await fetchHtmlTitleWithRenderer(url).catch(() => '')) || '').slice(0, 240))
+    )
+    .then(clean => {
+      cacheTitle(key, clean)
+      titleInflight.delete(key)
+      return clean
+    })
+
+  titleInflight.set(key, pending)
+  return pending
+}
+
+async function resourceBufferFromUrl(rawUrl) {
+  if (!rawUrl) throw new Error('Missing URL')
+  if (rawUrl.startsWith('data:')) {
+    const match = rawUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/s)
+    if (!match) throw new Error('Invalid data URL')
+    const mimeType = match[1] || 'application/octet-stream'
+    const encoded = match[3] || ''
+    const buffer = match[2] ? Buffer.from(encoded, 'base64') : Buffer.from(decodeURIComponent(encoded), 'utf8')
+    return { buffer, mimeType }
+  }
+  if (/^file:/i.test(rawUrl)) {
+    const { resolvedPath } = await resolveReadableFileForIpc(rawUrl, { purpose: 'Image file' })
+    const buffer = await fs.promises.readFile(resolvedPath)
+    return { buffer, mimeType: mimeTypeForPath(resolvedPath) }
+  }
+
+  const parsed = new URL(rawUrl)
+  const client = parsed.protocol === 'https:' ? https : http
+  return new Promise((resolve, reject) => {
+    const req = client.get(parsed, res => {
+      if ((res.statusCode || 500) >= 400) {
+        reject(new Error(`Failed to fetch ${rawUrl}: ${res.statusCode}`))
+        res.resume()
+        return
+      }
+      const chunks = []
+      res.on('error', reject)
+      res.on('data', chunk => chunks.push(chunk))
+      res.on('end', () => {
+        resolve({
+          buffer: Buffer.concat(chunks),
+          mimeType: res.headers['content-type'] || 'application/octet-stream'
+        })
+      })
+    })
+    req.on('error', reject)
+  })
+}
+
+async function copyImageFromUrl(rawUrl) {
+  const { buffer } = await resourceBufferFromUrl(rawUrl)
+  const image = nativeImage.createFromBuffer(buffer)
+  if (image.isEmpty()) throw new Error('Could not read image')
+  clipboard.writeImage(image)
+}
+
+async function saveImageFromUrl(rawUrl) {
+  const { buffer, mimeType } = await resourceBufferFromUrl(rawUrl)
+  const fallbackName = filenameFromUrl(rawUrl, `image${extensionForMimeType(mimeType) || '.png'}`)
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save Image',
+    defaultPath: fallbackName
+  })
+  if (result.canceled || !result.filePath) return false
+  await fs.promises.writeFile(result.filePath, buffer)
+  return true
+}
+
+async function writeComposerImage(buffer, ext = '.png') {
+  const rawExt = String(ext || '.png')
+    .trim()
+    .toLowerCase()
+  const normalizedExt = rawExt.startsWith('.') ? rawExt : `.${rawExt}`
+  const safeExt = /^\.[a-z0-9]{1,5}$/.test(normalizedExt) ? normalizedExt : '.png'
+  const dir = path.join(app.getPath('userData'), 'composer-images')
+  await fs.promises.mkdir(dir, { recursive: true })
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '')
+  const random = crypto.randomBytes(3).toString('hex')
+  const filePath = path.join(dir, `composer_${stamp}_${random}${safeExt}`)
+  await fs.promises.writeFile(filePath, buffer)
+  return filePath
+}
+
+function previewLabelForUrl(url) {
+  return `${url.host}${url.pathname === '/' ? '' : url.pathname}`
+}
+
+function expandUserPath(filePath) {
+  const value = String(filePath || '').trim()
+
+  if (value === '~') {
+    return app.getPath('home')
+  }
+
+  if (value.startsWith(`~${path.sep}`) || value.startsWith('~/')) {
+    return path.join(app.getPath('home'), value.slice(2))
+  }
+
+  return value
+}
+
+async function previewFileTarget(rawTarget, baseDir) {
+  const raw = String(rawTarget || '').trim()
+  const base = baseDir ? path.resolve(expandUserPath(baseDir)) : resolveHermesCwd()
+  let resolved = resolveRequestedPathForIpc(/^file:/i.test(raw) ? raw : expandUserPath(raw), {
+    baseDir: base,
+    purpose: 'Preview target'
+  })
+
+  if (directoryExists(resolved)) {
+    resolved = path.join(resolved, 'index.html')
+  }
+
+  const ext = path.extname(resolved).toLowerCase()
+  if (!fileExists(resolved)) {
+    return null
+  }
+
+  ;({ resolvedPath: resolved } = await resolveReadableFileForIpc(resolved, { purpose: 'Preview target' }))
+
+  const mimeType = mimeTypeForPath(resolved)
+  const metadata = previewFileMetadata(resolved, mimeType)
+  const isHtml = PREVIEW_HTML_EXTENSIONS.has(ext)
+  const isImage = mimeType.startsWith('image/')
+  const previewKind = isHtml ? 'html' : isImage ? 'image' : metadata.binary ? 'binary' : 'text'
+
+  return {
+    binary: metadata.binary,
+    byteSize: metadata.byteSize,
+    kind: 'file',
+    large: metadata.large,
+    label: path.basename(resolved),
+    language: PREVIEW_LANGUAGE_BY_EXT[ext] || 'text',
+    mimeType,
+    path: resolved,
+    previewKind,
+    source: raw,
+    url: pathToFileURL(resolved).toString()
+  }
+}
+
+function previewUrlTarget(rawTarget) {
+  const raw = String(rawTarget || '').trim()
+  const url = new URL(raw)
+
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return null
+  }
+
+  if (!LOCAL_PREVIEW_HOSTS.has(url.hostname.toLowerCase())) {
+    return null
+  }
+
+  if (url.hostname === '0.0.0.0') {
+    url.hostname = '127.0.0.1'
+  }
+
+  return {
+    kind: 'url',
+    label: previewLabelForUrl(url),
+    source: raw,
+    url: url.toString()
+  }
+}
+
+async function normalizePreviewTarget(rawTarget, baseDir) {
+  const raw = String(rawTarget || '').trim()
+
+  if (!raw) {
+    return null
+  }
+
+  try {
+    if (/^https?:\/\//i.test(raw)) {
+      return previewUrlTarget(raw)
+    }
+
+    return await previewFileTarget(raw, baseDir)
+  } catch {
+    return null
+  }
+}
+
+async function filePathFromPreviewUrl(rawUrl) {
+  const { resolvedPath } = await resolveReadableFileForIpc(String(rawUrl || ''), { purpose: 'Preview file' })
+  return resolvedPath
+}
+
+function sendPreviewFileChanged(payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const { webContents } = mainWindow
+  if (!webContents || webContents.isDestroyed()) return
+  webContents.send('hermes:preview-file-changed', payload)
+}
+
+async function watchPreviewFile(rawUrl) {
+  const filePath = await filePathFromPreviewUrl(rawUrl)
+  const watchDir = path.dirname(filePath)
+  const targetName = path.basename(filePath)
+  const id = crypto.randomBytes(12).toString('base64url')
+  let timer = null
+  const watcher = fs.watch(watchDir, (_eventType, filename) => {
+    const changedName = filename ? path.basename(String(filename)) : ''
+
+    if (changedName && changedName !== targetName) {
+      return
+    }
+
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = null
+      if (!fileExists(filePath)) return
+      sendPreviewFileChanged({ id, path: filePath, url: pathToFileURL(filePath).toString() })
+    }, PREVIEW_WATCH_DEBOUNCE_MS)
+  })
+
+  previewWatchers.set(id, {
+    close: () => {
+      if (timer) clearTimeout(timer)
+      watcher.close()
+    }
+  })
+
+  return { id, path: filePath }
+}
+
+function stopPreviewFileWatch(id) {
+  const watcher = previewWatchers.get(id)
+
+  if (!watcher) {
+    return false
+  }
+
+  watcher.close()
+  previewWatchers.delete(id)
+
+  return true
+}
+
+function closePreviewWatchers() {
+  for (const id of previewWatchers.keys()) {
+    stopPreviewFileWatch(id)
+  }
+}
 
 async function waitForHermes(baseUrl, token) {
   const deadline = Date.now() + 45_000
@@ -2385,6 +3369,27 @@ async function waitForHermes(baseUrl, token) {
   }
 
   throw new Error(`Hermes backend did not become ready: ${lastError?.message || 'timeout'}`)
+}
+
+function getWindowButtonPosition() {
+  if (!IS_MAC) return null
+  return mainWindow?.getWindowButtonPosition?.() || WINDOW_BUTTON_POSITION
+}
+
+function getNativeOverlayWidth() {
+  // macOS reports traffic-light coords via windowButtonPosition; the
+  // titlebarOverlay there doesn't reserve right-edge space. Windows/Linux
+  // render the native window-controls overlay on the right, so the renderer
+  // needs to inset its right cluster by this much to clear them.
+  return IS_MAC ? 0 : NATIVE_OVERLAY_BUTTON_WIDTH
+}
+
+function getWindowState() {
+  return {
+    isFullscreen: Boolean(mainWindow?.isFullScreen?.()),
+    nativeOverlayWidth: getNativeOverlayWidth(),
+    windowButtonPosition: getWindowButtonPosition()
+  }
 }
 
 function sendBackendExit(payload) {
@@ -2439,6 +3444,19 @@ function sendOpenUpdatesRequested() {
   if (OPL_SMOKE_NO_FOREGROUND) return
   if (!mainWindow.isVisible()) mainWindow.show()
   mainWindow.focus()
+}
+
+function sendWindowStateChanged(nextIsFullscreen) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const { webContents } = mainWindow
+  if (!webContents || webContents.isDestroyed()) return
+  const state = getWindowState()
+
+  if (typeof nextIsFullscreen === 'boolean') {
+    state.isFullscreen = nextIsFullscreen
+  }
+
+  webContents.send('hermes:window-state-changed', state)
 }
 
 function buildApplicationMenu() {
@@ -2586,6 +3604,66 @@ function installPreviewShortcut(window) {
   })
 }
 
+// Zoom level is persisted in the renderer's own localStorage (per-origin,
+// survives reloads/restarts) rather than a main-process JSON file. The main
+// process owns setZoomLevel, so we mirror each change into localStorage and
+// read it back on did-finish-load to re-apply after reloads or crash recovery.
+const ZOOM_STORAGE_KEY = 'hermes:desktop:zoomLevel'
+
+function clampZoomLevel(value) {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(Math.max(value, -9), 9)
+}
+
+function setAndPersistZoomLevel(window, zoomLevel) {
+  if (!window || window.isDestroyed()) return
+  const next = clampZoomLevel(zoomLevel)
+  window.webContents.setZoomLevel(next)
+  window.webContents
+    .executeJavaScript(
+      `try { localStorage.setItem(${JSON.stringify(ZOOM_STORAGE_KEY)}, ${JSON.stringify(String(next))}) } catch {}`
+    )
+    .catch(error => rememberLog(`[zoom] persist failed: ${error?.message || error}`))
+}
+
+function restorePersistedZoomLevel(window) {
+  if (!window || window.isDestroyed()) return
+  window.webContents
+    .executeJavaScript(
+      `(() => { try { return localStorage.getItem(${JSON.stringify(ZOOM_STORAGE_KEY)}) } catch { return null } })()`
+    )
+    .then(stored => {
+      if (stored == null || !window || window.isDestroyed()) return
+      const level = clampZoomLevel(Number(stored))
+      window.webContents.setZoomLevel(level)
+    })
+    .catch(error => rememberLog(`[zoom] restore failed: ${error?.message || error}`))
+}
+
+function installZoomShortcuts(window) {
+  // Override Ctrl/Cmd + +/-/0 with half the default zoom step (0.1 vs 0.2).
+  // The menu items handle this on macOS (where the menu is always present),
+  // but on Linux/Windows the menu is null and Chromium's default handler
+  // would use the full 0.2 step, so we intercept here for consistency.
+  const ZOOM_STEP = 0.1
+  window.webContents.on('before-input-event', (event, input) => {
+    const mod = IS_MAC ? input.meta : input.control
+    if (!mod || input.alt || input.shift) return
+
+    const key = input.key
+    if (key === '0') {
+      event.preventDefault()
+      setAndPersistZoomLevel(window, 0)
+    } else if (key === '=' || key === '+') {
+      event.preventDefault()
+      setAndPersistZoomLevel(window, window.webContents.getZoomLevel() + ZOOM_STEP)
+    } else if (key === '-') {
+      event.preventDefault()
+      setAndPersistZoomLevel(window, window.webContents.getZoomLevel() - ZOOM_STEP)
+    }
+  })
+}
+
 function installContextMenu(window) {
   window.webContents.on('context-menu', (_event, params) => {
     const template = []
@@ -2608,9 +3686,7 @@ function installContextMenu(window) {
         {
           label: 'Copy Image',
           click: () => {
-            void mediaPreview
-              .copyImageFromUrl(params.srcURL)
-              .catch(error => rememberLog(`Copy image failed: ${error.message}`))
+            void copyImageFromUrl(params.srcURL).catch(error => rememberLog(`Copy image failed: ${error.message}`))
           }
         },
         {
@@ -2620,9 +3696,7 @@ function installContextMenu(window) {
         {
           label: 'Save Image As...',
           click: () => {
-            void mediaPreview
-              .saveImageFromUrl(params.srcURL)
-              .catch(error => rememberLog(`Save image failed: ${error.message}`))
+            void saveImageFromUrl(params.srcURL).catch(error => rememberLog(`Save image failed: ${error.message}`))
           }
         }
       )
@@ -3597,9 +4671,7 @@ function startOplMaintenanceInBackground() {
       return result
     })
     .catch(error => {
-      rememberLog(
-        `[opl-maintenance] ${JSON.stringify({ type: 'failed', error: error instanceof Error ? error.message : String(error) })}`
-      )
+      rememberLog(`[opl-maintenance] ${JSON.stringify({ type: 'failed', error: error instanceof Error ? error.message : String(error) })}`)
       return { ok: true, skipped: true, error: error instanceof Error ? error.message : String(error) }
     })
   return oplMaintenancePromise
@@ -4773,11 +5845,39 @@ ipcMain.handle('hermes:notify', (_event, payload) => {
 })
 
 ipcMain.handle('hermes:readFileDataUrl', async (_event, filePath) => {
-  return mediaPreview.readFileDataUrl(filePath)
+  const { resolvedPath } = await resolveReadableFileForIpc(filePath, {
+    maxBytes: DATA_URL_READ_MAX_BYTES,
+    purpose: 'File preview'
+  })
+  const data = await fs.promises.readFile(resolvedPath)
+  return `data:${mimeTypeForPath(resolvedPath)};base64,${data.toString('base64')}`
 })
 
 ipcMain.handle('hermes:readFileText', async (_event, filePath) => {
-  return mediaPreview.readFileText(filePath)
+  const { resolvedPath, stat } = await resolveReadableFileForIpc(filePath, {
+    maxBytes: TEXT_PREVIEW_SOURCE_MAX_BYTES,
+    purpose: 'Text preview'
+  })
+  const ext = path.extname(resolvedPath).toLowerCase()
+  const handle = await fs.promises.open(resolvedPath, 'r')
+  const bytesToRead = Math.min(stat.size, TEXT_PREVIEW_MAX_BYTES)
+
+  try {
+    const buffer = Buffer.alloc(bytesToRead)
+    const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0)
+
+    return {
+      binary: looksBinary(buffer.subarray(0, Math.min(bytesRead, 4096))),
+      byteSize: stat.size,
+      language: PREVIEW_LANGUAGE_BY_EXT[ext] || 'text',
+      mimeType: mimeTypeForPath(resolvedPath),
+      path: resolvedPath,
+      text: buffer.subarray(0, bytesRead).toString('utf8'),
+      truncated: stat.size > TEXT_PREVIEW_MAX_BYTES
+    }
+  } finally {
+    await handle.close()
+  }
 })
 
 ipcMain.handle('hermes:selectPaths', async (_event, options = {}) => {
@@ -4809,39 +5909,72 @@ ipcMain.handle('hermes:writeClipboard', (_event, text) => {
   return true
 })
 
-ipcMain.handle('hermes:saveImageFromUrl', (_event, url) => mediaPreview.saveImageFromUrl(String(url || '')))
+ipcMain.handle('hermes:saveImageFromUrl', (_event, url) => saveImageFromUrl(String(url || '')))
 
 ipcMain.handle('hermes:saveImageBuffer', async (_event, payload) => {
   const data = payload?.data
   if (!data) throw new Error('saveImageBuffer: missing data')
 
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
-  return mediaPreview.writeComposerImage(buffer, payload?.ext || '.png')
+  return writeComposerImage(buffer, payload?.ext || '.png')
 })
 
-ipcMain.handle('hermes:saveClipboardImage', async () => mediaPreview.saveClipboardImage())
+ipcMain.handle('hermes:saveClipboardImage', async () => {
+  const image = clipboard.readImage()
+  if (!image || image.isEmpty()) {
+    return ''
+  }
+
+  return writeComposerImage(image.toPNG(), '.png')
+})
 
 ipcMain.handle('hermes:normalizePreviewTarget', (_event, target, baseDir) =>
-  mediaPreview.normalizePreviewTarget(String(target || ''), baseDir ? String(baseDir) : '')
+  normalizePreviewTarget(String(target || ''), baseDir ? String(baseDir) : '')
 )
 
-ipcMain.handle('hermes:watchPreviewFile', (_event, url) => mediaPreview.watchPreviewFile(String(url || '')))
+ipcMain.handle('hermes:watchPreviewFile', (_event, url) => watchPreviewFile(String(url || '')))
 
-ipcMain.handle('hermes:stopPreviewFileWatch', (_event, id) => mediaPreview.stopPreviewFileWatch(String(id || '')))
+ipcMain.handle('hermes:stopPreviewFileWatch', (_event, id) => stopPreviewFileWatch(String(id || '')))
 
 ipcMain.on('hermes:titlebar-theme', (_event, payload) => {
-  windowAppearance.setTitleBarTheme(payload, mainWindow)
+  if (!payload || !isHexColor(payload.background) || !isHexColor(payload.foreground)) {
+    return
+  }
+
+  rendererTitleBarTheme = {
+    background: payload.background,
+    foreground: payload.foreground
+  }
+  mainWindow?.setTitleBarOverlay?.(getTitleBarOverlayOptions())
 })
 
-// Pin the native appearance to the app theme.
+// Pin the native appearance to the app theme (see NATIVE_THEME_CONFIG_PATH).
 ipcMain.on('hermes:native-theme', (_event, mode) => {
-  windowAppearance.setNativeThemeSource(mode)
+  if (!THEME_SOURCES.has(mode)) {
+    return
+  }
+
+  if (nativeTheme.themeSource !== mode) {
+    nativeTheme.themeSource = mode
+    writePersistedThemeSource(mode)
+  }
 })
 
 // See-through window translucency. Persist + re-apply opacity to every open
 // window at runtime (no recreation, so caching/sessions are untouched).
 ipcMain.on('hermes:translucency', (_event, payload) => {
-  windowAppearance.setTranslucency(payload)
+  const next = clampIntensity(payload && payload.intensity)
+
+  if (next === translucencyIntensity) {
+    return
+  }
+
+  translucencyIntensity = next
+  writePersistedTranslucency(next)
+
+  for (const win of BrowserWindow.getAllWindows()) {
+    applyWindowTranslucency(win)
+  }
 })
 
 ipcMain.handle('hermes:openExternal', (_event, url) => {
@@ -4909,6 +6042,166 @@ ipcMain.handle('hermes:logs:reveal', async () => {
 
 ipcMain.handle('hermes:logs:recent', async () => ({ path: DESKTOP_LOG_PATH, lines: hermesLog.slice(-200) }))
 
+function isExecutableFile(filePath) {
+  if (!filePath || !path.isAbsolute(filePath)) {
+    return false
+  }
+
+  try {
+    fs.accessSync(filePath, fs.constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function posixShellSpec(shellPath) {
+  const shellName = path.basename(shellPath)
+  const interactiveArgs = shellName.includes('zsh') || shellName.includes('bash') ? ['-il'] : ['-i']
+
+  return { args: interactiveArgs, command: shellPath, name: shellName }
+}
+
+let spawnHelperChecked = false
+
+// node-pty execs a `spawn-helper` binary on macOS/Linux to launch the shell in a
+// fresh session. The prebuilt that ships in node-pty's `prebuilds/` (and the
+// staged copy under resources/native-deps) loses its execute bit through npm
+// pack / electron-builder file collection, so every nodePty.spawn() dies with
+// "posix_spawnp failed". Restore +x once, lazily, before the first spawn.
+function ensureSpawnHelperExecutable() {
+  if (spawnHelperChecked || IS_WINDOWS || !nodePtyDir) {
+    return
+  }
+
+  spawnHelperChecked = true
+
+  const arch = process.arch
+  const candidates = [
+    path.join(nodePtyDir, 'build', 'Release', 'spawn-helper'),
+    path.join(nodePtyDir, 'prebuilds', `${process.platform}-${arch}`, 'spawn-helper')
+  ]
+
+  for (const helper of candidates) {
+    try {
+      const mode = fs.statSync(helper).mode
+
+      if ((mode & 0o111) !== 0o111) {
+        fs.chmodSync(helper, mode | 0o755)
+      }
+    } catch {
+      // Not present in this layout (e.g. compiled build vs prebuild); skip.
+    }
+  }
+}
+
+// Windows PowerShell 5.1 ships at a fixed System32 path on every Windows box;
+// prefer it only after PowerShell 7+ (`pwsh`).
+function windowsPowerShellPath() {
+  const systemRoot = process.env.SystemRoot || process.env.windir || 'C:\\Windows'
+  const builtin = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+
+  return isExecutableFile(builtin) ? builtin : findOnPath('powershell.exe')
+}
+
+// Map a resolved shell path to its spawn spec, picking interactive flags by
+// family: PowerShell drops its logo banner (so the prompt sits flush like the
+// POSIX shells), cmd needs nothing, and everything else (zsh/bash/fish/sh…)
+// gets POSIX interactive-login flags.
+function shellSpecFor(shellPath) {
+  const name = path.basename(shellPath).toLowerCase()
+
+  if (name.startsWith('pwsh') || name.startsWith('powershell')) {
+    return { args: ['-NoLogo'], command: shellPath, name }
+  }
+
+  if (name.startsWith('cmd')) {
+    return { args: [], command: shellPath, name }
+  }
+
+  return posixShellSpec(shellPath)
+}
+
+// Best installed Windows shell: PowerShell 7+ (`pwsh`), then Windows PowerShell
+// 5.1, then comspec/cmd.exe as the universal fallback.
+function windowsShellSpec() {
+  const command =
+    findOnPath('pwsh.exe') || findOnPath('pwsh') || windowsPowerShellPath() || process.env.COMSPEC || 'cmd.exe'
+
+  return shellSpecFor(command)
+}
+
+// Resolve the interactive shell for the embedded terminal: an explicit user
+// override wins, otherwise auto-detect the best one installed for the platform.
+function terminalShellCommand() {
+  // HERMES_DESKTOP_SHELL is the cross-platform escape hatch (a path or a bare
+  // name on PATH); $SHELL is honored on POSIX, where it's the user's canonical
+  // choice, but ignored on Windows, where it's usually a stray MSYS/Git path
+  // node-pty can't spawn natively.
+  const override = (process.env.HERMES_DESKTOP_SHELL || (IS_WINDOWS ? '' : process.env.SHELL) || '').trim()
+
+  if (override) {
+    const resolved = isExecutableFile(override) ? override : findOnPath(override)
+
+    if (resolved) {
+      return shellSpecFor(resolved)
+    }
+  }
+
+  if (IS_WINDOWS) {
+    return windowsShellSpec()
+  }
+
+  const shellPath = ['/bin/zsh', '/bin/bash', '/bin/sh'].find(candidate => isExecutableFile(candidate))
+
+  return posixShellSpec(shellPath || '/bin/sh')
+}
+
+function safeTerminalCwd(cwd) {
+  const candidate = path.resolve(String(cwd || app.getPath('home')))
+
+  try {
+    const stat = fs.statSync(candidate)
+
+    return stat.isDirectory() ? candidate : path.dirname(candidate)
+  } catch {
+    return app.getPath('home')
+  }
+}
+
+function terminalShellEnv() {
+  const env = { ...process.env }
+
+  // Electron is commonly launched through `npm run dev`; do not leak npm's
+  // managed prefix into a user's interactive shell (nvm/proto warn loudly).
+  for (const key of Object.keys(env)) {
+    if (key === 'npm_config_prefix' || key.startsWith('npm_config_') || key.startsWith('npm_package_')) {
+      delete env[key]
+    }
+  }
+
+  // Strip color/theme-detection vars that ride along when Electron is launched
+  // from a non-tty agent shell (Cursor's runner sets NO_COLOR/FORCE_COLOR=0
+  // /TERM=dumb; some terminals set COLORFGBG which would flip Hermes' TUI into
+  // light-mode). Our PTY is a real xterm-compat terminal — force truecolor.
+  delete env.NO_COLOR
+  delete env.FORCE_COLOR
+  delete env.COLORFGBG
+
+  env.COLORTERM = 'truecolor'
+  env.LC_CTYPE = env.LC_CTYPE || 'UTF-8'
+  env.TERM = 'xterm-256color'
+  env.TERM_PROGRAM = 'Hermes'
+  env.TERM_PROGRAM_VERSION = app.getVersion()
+
+  // Let a hermes/--tui launched in this pane know it's embedded in the desktop
+  // GUI (build_environment_hints surfaces this). Distinct from HERMES_DESKTOP,
+  // which marks the agent *backend* and gates cron/gateway behavior.
+  env.HERMES_DESKTOP_TERMINAL = '1'
+
+  return env
+}
+
 function terminalChannel(id, suffix) {
   return `hermes:terminal:${id}:${suffix}`
 }
@@ -4942,17 +6235,17 @@ ipcMain.handle('hermes:terminal:start', async (event, payload = {}) => {
     throw new Error('PTY support is unavailable. Reinstall desktop dependencies and restart Hermes.')
   }
 
-  terminalShell.ensureSpawnHelperExecutable()
+  ensureSpawnHelperExecutable()
 
   const id = crypto.randomUUID()
-  const { args, command, name } = terminalShell.terminalShellCommand()
-  const cwd = terminalShell.safeTerminalCwd(payload?.cwd)
+  const { args, command, name } = terminalShellCommand()
+  const cwd = safeTerminalCwd(payload?.cwd)
   const cols = Math.max(2, Number.parseInt(String(payload?.cols || 80), 10) || 80)
   const rows = Math.max(2, Number.parseInt(String(payload?.rows || 24), 10) || 24)
   const ptyProcess = nodePty.spawn(command, args, {
     cols,
     cwd,
-    env: terminalShell.terminalShellEnv(),
+    env: terminalShellEnv(),
     name: 'xterm-256color',
     rows
   })
@@ -5386,7 +6679,7 @@ app.whenReady().then(() => {
     Menu.setApplicationMenu(null)
   }
   installMediaPermissions()
-  mediaPreview.registerMediaProtocol()
+  registerMediaProtocol()
   registerDeepLinkProtocol()
   ensureWslWindowsFonts()
   configureSpellChecker()
@@ -5443,9 +6736,12 @@ app.on('before-quit', () => {
     }
   }
 
-  desktopLog.cancelScheduledFlush()
-  desktopLog.flushSync()
-  mediaPreview.closePreviewWatchers()
+  if (desktopLogFlushTimer) {
+    clearTimeout(desktopLogFlushTimer)
+    desktopLogFlushTimer = null
+  }
+  flushDesktopLogBufferSync()
+  closePreviewWatchers()
 
   if (hermesProcess && !hermesProcess.killed) {
     hermesProcess.kill('SIGTERM')
