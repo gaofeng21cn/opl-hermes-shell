@@ -50,6 +50,7 @@ const { createMediaPreviewController } = require('./parts/media-preview.cjs')
 const { createExternalOpener } = require('./parts/open-external.cjs')
 const { createWindowAppearanceController } = require('./parts/window-appearance.cjs')
 const { createWindowZoomController } = require('./parts/window-zoom.cjs')
+const { createWindowStateController } = require('./parts/window-state.cjs')
 const { createDesktopLogController } = require('./parts/desktop-log.cjs')
 const { createTerminalShellController } = require('./parts/terminal-shell.cjs')
 const { seedOplHermesDefaults } = require('./opl-defaults.cjs')
@@ -455,6 +456,15 @@ const {
   setAndPersistZoomLevel
 } = createWindowZoomController({ isMac: IS_MAC, rememberLog })
 const terminalShell = createTerminalShellController({ app, findOnPath, isWindows: IS_WINDOWS, nodePtyDir })
+const {
+  getWindowState,
+  sendWindowStateChanged
+} = createWindowStateController({
+  defaultWindowButtonPosition: WINDOW_BUTTON_POSITION,
+  getMainWindow: () => mainWindow,
+  isMac: IS_MAC,
+  nativeOverlayButtonWidth: NATIVE_OVERLAY_BUTTON_WIDTH
+})
 
 function ensureWslWindowsFonts() {
   if (!IS_WSL) return
@@ -2420,27 +2430,6 @@ async function waitForHermes(baseUrl, token) {
   throw new Error(`Hermes backend did not become ready: ${lastError?.message || 'timeout'}`)
 }
 
-function getWindowButtonPosition() {
-  if (!IS_MAC) return null
-  return mainWindow?.getWindowButtonPosition?.() || WINDOW_BUTTON_POSITION
-}
-
-function getNativeOverlayWidth() {
-  // macOS reports traffic-light coords via windowButtonPosition; the
-  // titlebarOverlay there doesn't reserve right-edge space. Windows/Linux
-  // render the native window-controls overlay on the right, so the renderer
-  // needs to inset its right cluster by this much to clear them.
-  return IS_MAC ? 0 : NATIVE_OVERLAY_BUTTON_WIDTH
-}
-
-function getWindowState() {
-  return {
-    isFullscreen: Boolean(mainWindow?.isFullScreen?.()),
-    nativeOverlayWidth: getNativeOverlayWidth(),
-    windowButtonPosition: getWindowButtonPosition()
-  }
-}
-
 function sendBackendExit(payload) {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const { webContents } = mainWindow
@@ -2493,19 +2482,6 @@ function sendOpenUpdatesRequested() {
   if (OPL_SMOKE_NO_FOREGROUND) return
   if (!mainWindow.isVisible()) mainWindow.show()
   mainWindow.focus()
-}
-
-function sendWindowStateChanged(nextIsFullscreen) {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { webContents } = mainWindow
-  if (!webContents || webContents.isDestroyed()) return
-  const state = getWindowState()
-
-  if (typeof nextIsFullscreen === 'boolean') {
-    state.isFullscreen = nextIsFullscreen
-  }
-
-  webContents.send('hermes:window-state-changed', state)
 }
 
 function buildApplicationMenu() {
