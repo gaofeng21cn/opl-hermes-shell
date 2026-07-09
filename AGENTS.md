@@ -5,6 +5,23 @@ It is derived from `NousResearch/hermes-agent/apps/desktop` and remains a
 replaceable implementation carrier. The App product truth stays in
 `/Users/gaofeng/workspace/one-person-lab-app`.
 
+Upstream Hermes Desktop / `hermes-agent` is the primary design, implementation,
+and maintenance owner for the upstream shell body. OPL does not maintain Hermes
+itself; this repository should carry only the thin candidate adaptation required
+to compare or bridge Hermes into One Person Lab App.
+
+Allowed OPL changes are limited to the candidate adapter boundary: OPL branding,
+Codex app-server bridge wiring, packaging/readback hooks, OPL-owned overlays,
+and the smallest verification needed for those surfaces. Hermes source,
+renderer/runtime, UI behavior, tests, dependencies, and build structure outside
+OPL-owned overlays are read-only by default.
+
+Do not do test slimming, architecture refactors, style or interaction rewrites,
+dependency upgrades, or upstream behavior fixes in the Hermes shell body. If a
+change appears necessary there, first prove why it cannot be solved from the OPL
+App / OPL Framework side, name the exact write set, verification command, and
+rollback point, and prefer an upstream issue or PR over local ownership.
+
 Rules:
 - Treat the current App GUI topology as fixed unless the App repo changes its
   contracts: AionUI is the active GUI mainline, Hermes Desktop / `hermes-codex`
