@@ -2,8 +2,8 @@
   "surface_kind": "opl_hermes_candidate_profile",
   "schema_version": "opl-hermes-candidate-profile.v1",
   "owner": "opl-hermes-shell",
-  "state": "technical_verification_candidate",
-  "machine_boundary": "This profile is the local candidate validation and packaging source for the Hermes foreground alternative. It is not App product truth, active-shell adoption evidence, release evidence, Live Evidence, or production readiness.",
+  "state": "technical_reference",
+  "machine_boundary": "This profile is the local technical validation and packaging source for the retained Hermes reference. Existing candidate identities are compatibility-only. It is not the foreground alternative, App product truth, active-shell adoption evidence, release evidence, Live Evidence, or production readiness.",
   "candidate": {
     "shell_id": "hermes-codex",
     "package_name": "opl-hermes-shell",
@@ -19,7 +19,8 @@
   "app_topology_policy": {
     "app_product_truth_owner": "one-person-lab-app",
     "active_mainline_shell": "AionUI/opl-aion-shell",
-    "foreground_alternative": "Hermes Desktop/hermes-codex",
+    "foreground_alternative": "OPL Native Workbench/opl-native-workbench",
+    "retained_reference": "Hermes Desktop/hermes-codex",
     "archived_technical_proof_only": "AGUI/agui-codex",
     "default_release_shell_unchanged": true,
     "active_shell_adopted": false
@@ -61,7 +62,7 @@
     "surface_kind": "opl_hermes_candidate_functional_convergence_readback",
     "schema_version": "opl-hermes-functional-convergence-readback.v1",
     "readback_command_ref": "npm run validate:candidate",
-    "state": "technical_verification_candidate_not_active_shell",
+    "state": "retained_reference_technical_verification_not_active_shell",
     "implemented_capabilities_source": "candidate_capability_policy.implemented_capabilities",
     "deferred_capabilities_source": "candidate_capability_policy.deferred_until_feature_comparison",
     "forbidden_resurrection_source": "candidate_capability_policy.forbidden_resurrection_surfaces",
@@ -110,7 +111,7 @@
     "surface_kind": "opl_hermes_candidate_operator_functional_surface_readback",
     "schema_version": "opl-hermes-operator-functional-surface-readback.v1",
     "readback_command_ref": "npm run validate:candidate",
-    "state": "ordinary_operator_candidate_surface_available_not_active_shell",
+    "state": "retained_reference_operator_surface_available_not_active_shell",
     "gateway_scope_ref": "electron/opl-codex-gateway.cjs#describeOplCodexGatewayScope",
     "required_operator_surfaces": [
       {
@@ -199,6 +200,7 @@
     "packaged_candidate_command": "npm run validate:candidate -- --require-app",
     "visual_smoke_command": "npm run validate:candidate -- --require-visual-smoke",
     "default_non_foreground": true,
+    "retained_reference_only": true,
     "visual_smoke_requires_foreground_opt_in": true,
     "required_source_refs": [
       "README_OPL.md",
@@ -209,6 +211,7 @@
   },
   "false_ready_boundary": {
     "candidate_valid_can_claim_active_shell_adopted": false,
+    "candidate_valid_can_claim_foreground_alternative": false,
     "candidate_valid_can_claim_app_release_ready": false,
     "candidate_valid_can_claim_production_ready": false,
     "candidate_valid_can_claim_live_user_path": false,
@@ -224,6 +227,7 @@
     "can_create_typed_blocker": false,
     "can_claim_release_ready": false,
     "can_claim_production_ready": false,
+    "can_claim_foreground_alternative": false,
     "can_restore_agui_foreground_candidate": false
   }
 }

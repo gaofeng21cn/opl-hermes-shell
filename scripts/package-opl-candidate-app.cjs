@@ -132,6 +132,7 @@ const manifest = {
   active_shell_adopted: topologyPolicy.active_shell_adopted,
   active_mainline_shell: topologyPolicy.active_mainline_shell,
   foreground_alternative: topologyPolicy.foreground_alternative,
+  retained_reference: topologyPolicy.retained_reference,
   archived_technical_proof_only: topologyPolicy.archived_technical_proof_only,
   hermes_runtime_authority_transfer: capabilityPolicy.hermes_runtime_authority_transfer,
   official_hermes_backend_preserved: capabilityPolicy.official_hermes_backend_preserved,

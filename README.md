@@ -83,21 +83,22 @@ npm run pack         # unpacked app under release/ (no installer)
 
 Installers are built and uploaded to GitHub Releases manually. macOS/Windows signing & notarization happen automatically when the relevant credentials are present in the environment (`CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_*` for macOS, `WIN_CSC_*` for Windows).
 
-### How it works in this OPL candidate
+### How it works in this OPL retained reference
 
-This checkout is the One Person Lab Hermes candidate shell. The official Hermes
-Desktop renderer, settings, onboarding, and packaging shape are preserved, but
-the ordinary OPL path does not install Hermes Agent as the chat executor. First
-launch runs the OPL startup split: lightweight checks, one-time local
-initialization only when needed, gflabtoken model access, and deferred OPL
-maintenance. Chat runs through the OPL Codex gateway backed by
-`codex app-server --listen stdio://`.
+This checkout is the retained One Person Lab Hermes technical reference. The
+official Hermes Desktop renderer, settings, onboarding, and packaging shape are
+preserved, while existing `candidate` package and command names remain only for
+compatibility with technical replay. The ordinary OPL path does not install
+Hermes Agent as the chat executor. First launch runs the OPL startup split:
+lightweight checks, one-time local initialization only when needed, gflabtoken
+model access, and deferred OPL maintenance. Chat runs through the OPL Codex
+gateway backed by `codex app-server --listen stdio://`.
 
 Within the current One Person Lab App GUI policy, AionUI remains the active
-mainline shell and this Hermes Desktop checkout is the only foreground
-alternative. AGUI/CopilotKit is archived technical proof only; it is not a
-feature backlog, validation baseline, or default implementation source for this
-Hermes lane.
+mainline shell, OPL Native Workbench is the only foreground alternative, and
+this Hermes Desktop checkout is a retained reference. AGUI/CopilotKit is
+archived technical proof only. Neither retained nor archived references are a
+default validation scope or feature backlog for current GUI development.
 
 The packaged candidate app is built by `npm run package` and verified by
 `npm run smoke:opl-first-run`. The smoke launches the real `.app`, checks the

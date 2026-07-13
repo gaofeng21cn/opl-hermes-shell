@@ -2,8 +2,8 @@
 
 Owner: `opl-hermes-shell`
 Purpose: `upstream_reference_and_opl_customization_strategy`
-State: `active_candidate_guidance`
-Machine boundary: 本文是人读开发准则。候选 shell 的机器可读验收仍由
+State: `retained_reference_guidance`
+Machine boundary: 本文是人读开发准则。Hermes 技术参考面的机器可读验证仍由
 `package.json`、`scripts/validate-hermes-codex-candidate.cjs`、App repo 的
 `contracts/shell-adapters/hermes-codex.json`、`contracts/app-shell-candidates.json`
 和 App-root validation 命令定义。
@@ -17,26 +17,27 @@ Machine boundary: 本文是人读开发准则。候选 shell 的机器可读验�
 
 - AionUI 是 One Person Lab App 的 active GUI mainline，由 App 仓通过
   `shells/aionui` 消费 `opl-aion-shell`。
-- Hermes Desktop / `hermes-codex` 是唯一 foreground alternative。本仓只承载这条
-  Hermes alternative lane 的 upstream 对比、最小 OPL delta、候选打包和技术验证。
+- OPL Native Workbench / `opl-native-workbench` 是唯一 foreground alternative。
+- Hermes Desktop / `hermes-codex` 是 retained reference。本仓只保留 upstream
+  对比、最小 OPL delta、兼容候选包和显式技术回放能力，不进入默认候选验证范围。
 - AG-UI/CopilotKit / `agui-codex` 已降为 archived technical proof / explicit replay
   surface；除非用户明确要求 AGUI replay，不再更新、完善、抛光或纳入默认验证。
 
-因此，Hermes 工作只对“是否可能成为 AionUI 之外的唯一 foreground alternative”
-负责，不吸收 AGUI proof 的功能 backlog、WebUI 假设、验证负担或 adoption 叙事。
-需要 AGUI replay 时，应回到 `opl-agui-codex-shell` 和 App repo 的 explicit adapter
-contract，而不是在本仓继续移植。
+因此，Hermes 工作只服务于成熟桌面 UX、onboarding、跨平台 packaging、文件/预览、
+Settings、语音等参考与显式回放，不承担 foreground 交付路线，也不吸收 AGUI proof
+的功能 backlog、WebUI 假设、验证负担或 adoption 叙事。只有 App owner 明确重新做
+候选决策时，Hermes 才能进入新的 promotion 评估。
 
 ## 参考系
 
-当前候选基线：
+当前参考基线：
 
 - upstream repo: `NousResearch/hermes-agent`
 - upstream app path: `apps/desktop`
 - evaluated source ref: `5e01a5dbf1b7bc0144d9057be706da1ea9f065c3`
 - upstream license: `MIT`
-- local role: One Person Lab App 的唯一 foreground alternative；当前包与 smoke 证据
-  仍按 technical verification 读取，直到 App repo 显式完成 active-shell adoption。
+- local role: One Person Lab App 的 retained reference；当前包与 smoke 证据仍只按
+  technical verification 读取，不代表 foreground alternative 或 active-shell adoption。
 
 后续升级 Hermes Desktop 时，必须先把待升级 upstream ref 写清楚，再做对照。推荐的
 对照对象是：
@@ -52,9 +53,11 @@ contract，而不是在本仓继续移植。
 或 runtime 改动，都要能回答：它是在跟随 upstream、新增 OPL 必要定制、隐藏不需要的
 Hermes 普通用户面，还是临时实验。
 
-## Candidate Profile Contract
+## Compatibility Profile Contract
 
 `contracts/opl-hermes-candidate-profile.json` 是本仓 technical verification 的机器入口。
+文件名和既有 `candidate` 字段为 package/readback 兼容标识；profile 的当前生命周期
+角色是 `technical_reference`，不得从兼容命名反推 foreground alternative 身份。
 它把 product identity、upstream source ref、App topology、deferred capability、
 forbidden resurrection surface、false-ready boundary 和 authority boundary 收在同一
 个 contract 中。`scripts/validate-hermes-codex-candidate.cjs` 和
@@ -322,7 +325,7 @@ App repo 仍是 OPL App GUI product truth：
 - `docs/app-ideal-gui-interaction-spec.md` 定义理想交互。
 - `docs/codex-to-opl-app-delta.md` 定义 Codex App 到 OPL App 的增量。
 - `docs/app-gui-feature-inventory.md` 定义跨 shell 能力清单。
-- `contracts/app-shell-candidates.json` 登记 Hermes candidate。
+- `contracts/app-shell-candidates.json` 登记 Hermes technical reference。
 - `contracts/shell-adapters/hermes-codex.json` 定义 explicit adapter。
 
 本仓只能承载 Hermes implementation delta。候选验证通过只表示 technical

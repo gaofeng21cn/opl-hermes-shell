@@ -1,15 +1,18 @@
-# One Person Lab Hermes Candidate
+# One Person Lab Hermes Retained Reference
 
 Owner: `opl-hermes-shell`
-Purpose: `hermes_desktop_candidate_shell`
-State: `technical_verification_candidate_official_baseline_first`
-Machine boundary: 本文是人读候选 shell 说明。OPL App 产品真相仍在
+Purpose: `hermes_desktop_retained_reference`
+State: `retained_reference_technical_verification_official_baseline_first`
+Machine boundary: 本文是人读 Hermes 技术参考说明。既有 `candidate` 包名和命令名
+只作为兼容标识。OPL App 产品真相仍在
 `/Users/gaofeng/workspace/one-person-lab-app` 的 contracts、docs、page-state
 matrix、release gates 和验证脚本中。
 
-本仓是 One Person Lab App 的独立 Hermes Desktop 候选 shell。它从官方
-`NousResearch/hermes-agent` 的 `apps/desktop` 复制而来，目标是验证一条更接近
-Codex App 换壳体验的 GUI 路线。
+本仓是 One Person Lab App 保留的 Hermes Desktop 技术参考。它从官方
+`NousResearch/hermes-agent` 的 `apps/desktop` 复制而来，用于保留成熟桌面 UX、
+onboarding、跨平台 packaging、文件/预览、Settings 和语音等参考与显式回放能力。
+当前 active GUI 是 AionUI，唯一 foreground alternative 是 OPL Native Workbench；
+Hermes 不进入默认候选推进范围。
 
 - upstream repository: `https://github.com/NousResearch/hermes-agent`
 - upstream subtree: `apps/desktop`
@@ -26,17 +29,17 @@ toolsets、MCP、profiles、cron、文件/预览和官方 baseline 能力继续�
 把 Codex/OPL/MAS 作为执行器或 agent route 扩展接入。不能把最小 Codex shim 当成
 完整 Hermes backend 替换，也不是把 AionUI/AGUI 稳定线能力闭着眼睛搬过来。
 
-## 当前候选边界
+## 当前参考边界
 
-本仓只作为 App repo 的外部候选实现载体。当前 active/release shell 仍是
-AionUI；只有显式使用 App repo 的 Hermes adapter contract 时，App wrapper 才会
-选择本候选：
+本仓只作为 App repo 的外部参考与 technical replay 载体。当前 active/release
+shell 仍是 AionUI，foreground alternative 是 OPL Native Workbench；只有显式使用
+App repo 的 Hermes adapter contract 时，App wrapper 才会选择 Hermes 兼容包：
 
 ```bash
 OPL_APP_SHELL_ADAPTER_CONTRACT=contracts/shell-adapters/hermes-codex.json npm run package
 ```
 
-当前候选只保留最小 OPL delta：
+当前参考面只保留最小 OPL delta：
 
 - branding/package identity：`One Person Lab Hermes Candidate`，
   bundle id `cn.onepersonlab.app.hermes-codex-candidate`，图标复用当前 OPL

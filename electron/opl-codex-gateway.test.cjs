@@ -330,7 +330,7 @@ test('OPL Codex gateway scope helper documents ordinary operator functional surf
   const slashCommands = new Set(scope.codexSkills.filter(skill => skill.skill_id !== 'opl').map(skill => `/${skill.skill_id}`))
 
   assert.equal(operatorReadback.surface_kind, 'opl_hermes_candidate_operator_functional_surface_readback')
-  assert.equal(operatorReadback.state, 'ordinary_operator_candidate_surface_available_not_active_shell')
+  assert.equal(operatorReadback.state, 'retained_reference_operator_surface_available_not_active_shell')
   assert.equal(operatorReadback.gateway_scope_ref, 'electron/opl-codex-gateway.cjs#describeOplCodexGatewayScope')
 
   for (const surface of operatorReadback.required_operator_surfaces) {

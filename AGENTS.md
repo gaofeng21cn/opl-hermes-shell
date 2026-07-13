@@ -1,14 +1,16 @@
-# OPL Hermes Shell Candidate Guide
+# OPL Hermes Shell Retained Reference Guide
 
-This repository is an external candidate shell checkout for One Person Lab App.
-It is derived from `NousResearch/hermes-agent/apps/desktop` and remains a
-replaceable implementation carrier. The App product truth stays in
-`/Users/gaofeng/workspace/one-person-lab-app`.
+This repository is an external retained-reference checkout for One Person Lab
+App. It is derived from `NousResearch/hermes-agent/apps/desktop` and remains a
+replaceable reference and technical-verification carrier. The App product truth
+stays in `/Users/gaofeng/workspace/one-person-lab-app`.
 
 Upstream Hermes Desktop / `hermes-agent` is the primary design, implementation,
 and maintenance owner for the upstream shell body. OPL does not maintain Hermes
-itself; this repository should carry only the thin candidate adaptation required
-to compare or bridge Hermes into One Person Lab App.
+itself; this repository should carry only the thin retained-reference adaptation
+required to preserve, compare, or explicitly replay Hermes in One Person Lab
+App. Existing `candidate` package and command names are compatibility identities,
+not a foreground role.
 
 Allowed OPL changes are limited to the candidate adapter boundary: OPL branding,
 Codex app-server bridge wiring, packaging/readback hooks, OPL-owned overlays,
@@ -24,15 +26,16 @@ rollback point, and prefer an upstream issue or PR over local ownership.
 
 Rules:
 - Treat the current App GUI topology as fixed unless the App repo changes its
-  contracts: AionUI is the active GUI mainline, Hermes Desktop / `hermes-codex`
-  is the only foreground alternative, and AGUI / `agui-codex` is archived
+  contracts: AionUI is the active GUI mainline, OPL Native Workbench /
+  `opl-native-workbench` is the only foreground alternative, Hermes Desktop /
+  `hermes-codex` is a retained reference, and AGUI / `agui-codex` is archived
   technical proof only.
 - Do not make Hermes runtime, gateway, providers, sessions, memory, or installer
   state an OPL source of truth.
 - Do not add OPL App state/action, page-state, first-run, Full runtime, or
   release-gate surfaces until they have a Hermes feature comparison and an
   App-owned adoption gate.
-- Keep the first candidate bridge small: OPL branding plus a Hermes-compatible
+- Keep the retained-reference bridge small: OPL branding plus a Hermes-compatible
   Codex app-server adapter, while preserving the upstream Hermes Desktop
   feature shape for comparison.
 - Do not copy AGUI/CopilotKit proof work, validation burden, WebUI assumptions,
