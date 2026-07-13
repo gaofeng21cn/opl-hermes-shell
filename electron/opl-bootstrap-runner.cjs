@@ -69,6 +69,22 @@ function pathEntries(env) {
     .filter(Boolean)
 }
 
+function withDesktopCommandPath(env = process.env, supplementalEntries = null) {
+  if (IS_WINDOWS) return { ...env }
+
+  const home = String(env.HOME || process.env.HOME || '').trim()
+  const desktopEntries = supplementalEntries ?? [
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    home ? path.join(home, '.local', 'bin') : null,
+    home ? path.join(home, 'bin') : null,
+    '/usr/bin',
+    '/bin'
+  ]
+  const entries = [...new Set([...pathEntries(env), ...desktopEntries.filter(Boolean)])]
+  return { ...env, PATH: entries.join(path.delimiter) }
+}
+
 function executableNames(command, env) {
   if (!IS_WINDOWS || path.extname(command)) return [command]
   const pathext = String(env.PATHEXT || process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM')
@@ -647,13 +663,15 @@ async function runOplMaintenanceStages({ cwd, env, abortSignal, emit, emitOutput
 async function runOplBootstrap(opts = {}) {
   const {
     cwd = process.env.HOME || process.cwd(),
-    env = process.env,
+    env: inheritedEnv = process.env,
+    desktopCommandPathEntries = null,
     logRoot = path.join(process.env.HOME || process.cwd(), 'Library', 'Logs', 'One Person Lab'),
     markerPath = null,
     requiredCorePaths = [],
     onEvent,
     abortSignal
   } = opts
+  const env = withDesktopCommandPath(inheritedEnv, desktopCommandPathEntries)
 
   if (abortSignal?.aborted) {
     onEvent?.({ type: 'failed', error: 'bootstrap cancelled by user' })
@@ -935,5 +953,6 @@ module.exports = {
   requiredCoreMissing,
   runCommand,
   runOplMaintenanceStages,
-  runOplBootstrap
+  runOplBootstrap,
+  withDesktopCommandPath
 }

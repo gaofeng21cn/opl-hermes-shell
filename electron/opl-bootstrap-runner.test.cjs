@@ -12,7 +12,8 @@ const {
   readyToLaunch,
   requiredCoreMissing,
   runOplMaintenanceStages,
-  runOplBootstrap
+  runOplBootstrap,
+  withDesktopCommandPath
 } = require('./opl-bootstrap-runner.cjs')
 const { writeOplStartupMarker } = require('./opl-startup-marker.cjs')
 
@@ -233,6 +234,38 @@ test('runOplBootstrap uses fast app state when marker is missing but OPL is alre
     assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-maintenance-schedule' && ev.state === 'succeeded'))
     assert.equal(events.some(ev => ev.type === 'stage' && ev.name === 'opl-startup-maintenance'), false)
     assert.equal(events.some(ev => /install\.sh|install\.ps1|Hermes Agent/.test(JSON.stringify(ev))), false)
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('runOplBootstrap finds installed CLIs when a Finder launch omits user executable directories', async () => {
+  const home = mkTmpHome()
+  const bin = path.join(home, '.local', 'bin')
+  const markerPath = path.join(home, 'userData', 'opl-startup-marker.json')
+  fs.mkdirSync(bin, { recursive: true })
+  writeFixtureOpl(bin, { initialize: [initializePayload()] })
+  writeFixtureCodex(bin)
+  writeOplStartupMarker(markerPath, { api_key_present: true })
+
+  const events = []
+  try {
+    const finderEnv = { HOME: home, PATH: '/usr/bin:/bin' }
+    const augmentedEnv = withDesktopCommandPath(finderEnv)
+    assert.ok(augmentedEnv.PATH.split(path.delimiter).includes('/opt/homebrew/bin'))
+    assert.ok(augmentedEnv.PATH.split(path.delimiter).includes(bin))
+
+    const result = await runOplBootstrap({
+      cwd: home,
+      env: finderEnv,
+      logRoot: path.join(home, 'logs'),
+      markerPath,
+      onEvent: ev => events.push(ev)
+    })
+
+    assert.equal(result.ok, true)
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'opl-cli-check' && ev.state === 'succeeded'))
+    assert.ok(events.some(ev => ev.type === 'stage' && ev.name === 'codex-cli-check' && ev.state === 'succeeded'))
   } finally {
     fs.rmSync(home, { recursive: true, force: true })
   }
@@ -535,7 +568,8 @@ test('runOplBootstrap fails early when Codex CLI is unavailable', async () => {
   try {
     const result = await runOplBootstrap({
       cwd: home,
-      env: { PATH: bin },
+      env: { HOME: home, PATH: bin },
+      desktopCommandPathEntries: [],
       logRoot: path.join(home, 'logs'),
       onEvent: ev => events.push(ev)
     })
