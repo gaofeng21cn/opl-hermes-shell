@@ -4,6 +4,7 @@
 
 - 上游 Hermes Desktop 持有 shell body；本仓的 OPL-owned surface 是 branding、Codex app-server bridge、packaging/readback hooks 和 overlays。
 - 当前 GUI 角色以 App 的 `contracts/app-shell-adapter.json` 为准，AionUI 是 active shell，Hermes 用于对照和显式 candidate 验证。
+- Hermes 只用于技术验证。日常只跑 source-only 的 `npm run validate:candidate`；完整 build、package、smoke 和 install 仅在实际 Hermes 开发需要 packaged evidence 时人工触发，不得接入 push、pull request、schedule、watch/on-save、daily patrol 或 routine validation。
 - 上游同步与本地 delta 说明见 `docs/opl-hermes-upstream-strategy.md`。
 
 默认最小验证入口：`npm run validate:candidate`。

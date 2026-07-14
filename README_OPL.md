@@ -130,14 +130,23 @@ release-ready、production-ready 或 full-release-ready。
 
 ## 本地验证
 
-常用验证命令：
+默认日常验证只做 source/contract 检查，不编译候选包：
 
 ```bash
 npm run validate:candidate
 npm run typecheck
+```
+
+只有实际 Hermes 开发任务需要 packaged evidence 时，才人工执行：
+
+```bash
 npm run package
 npm run validate:candidate -- --require-app
 ```
+
+不得把 Hermes build/package/smoke/install 接入 push、pull request、schedule、
+watch/on-save、daily patrol 或 routine validation。Hermes 不参加 Stable/Nightly
+release channel，也没有实时编译路径。
 
 `--require-app` 只检查候选包和默认静默 packaged first-run smoke。默认验证不应打开或
 聚焦本机前台窗口；`smoke:opl-first-run` 会设置

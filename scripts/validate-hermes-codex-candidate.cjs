@@ -20,6 +20,7 @@ const firstRunSmoke = read('scripts/smoke-opl-first-run.cjs')
 const candidateProfile = JSON.parse(read('contracts/opl-hermes-candidate-profile.json'))
 const candidate = candidateProfile.candidate
 const topologyPolicy = candidateProfile.app_topology_policy
+const buildExecutionPolicy = candidateProfile.build_execution_policy
 const capabilityPolicy = candidateProfile.candidate_capability_policy
 const convergenceProfile = candidateProfile.functional_convergence_readback
 const operatorSurfaceProfile = candidateProfile.operator_functional_surface_readback
@@ -275,6 +276,14 @@ assert(topologyPolicy.retained_reference === 'Hermes Desktop/hermes-codex', 'can
 assert(topologyPolicy.archived_technical_proof_only === 'AGUI/agui-codex', 'candidate profile must keep AGUI archived')
 assert(topologyPolicy.default_release_shell_unchanged === true, 'candidate profile must not switch the default release shell')
 assert(topologyPolicy.active_shell_adopted === false, 'candidate profile must not claim active-shell adoption')
+assert(buildExecutionPolicy.scope === 'technical_verification_only', 'Hermes builds must stay technical-verification-only')
+assert(buildExecutionPolicy.trigger === 'manual_on_demand_only', 'Hermes builds must stay manual and on-demand')
+assert(buildExecutionPolicy.automatic_build_allowed === false, 'Hermes automatic builds must remain disabled')
+assert(buildExecutionPolicy.default_validation_includes_build === false, 'default Hermes validation must remain source-only')
+assert(buildExecutionPolicy.release_channel_participation.length === 0, 'Hermes builds must stay outside release channels')
+for (const trigger of ['push', 'pull_request', 'schedule', 'watch_or_on_save', 'daily_patrol', 'routine_validation']) {
+  assert(buildExecutionPolicy.forbidden_automatic_triggers.includes(trigger), `Hermes build policy must forbid ${trigger}`)
+}
 assert(candidateProfile.validation_profile.default_non_foreground === true, 'retained reference validation must remain outside the foreground path')
 assert(candidateProfile.validation_profile.retained_reference_only === true, 'candidate profile must limit Hermes to retained-reference validation')
 assert(capabilityPolicy.official_hermes_backend_preserved === true, 'candidate profile must preserve the official Hermes backend')
@@ -553,6 +562,7 @@ console.log(JSON.stringify({
   status: 'hermes_codex_candidate_valid',
   require_app: requireApp,
   require_visual_smoke: requireVisualSmoke,
+  build_execution_policy: buildExecutionPolicy,
   functional_convergence_readback: functionalConvergenceReadback,
   operator_functional_surface_readback: operatorFunctionalSurfaceReadback
 }, null, 2))

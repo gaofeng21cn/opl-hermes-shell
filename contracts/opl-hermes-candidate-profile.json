@@ -25,6 +25,21 @@
     "default_release_shell_unchanged": true,
     "active_shell_adopted": false
   },
+  "build_execution_policy": {
+    "scope": "technical_verification_only",
+    "trigger": "manual_on_demand_only",
+    "automatic_build_allowed": false,
+    "default_validation_includes_build": false,
+    "release_channel_participation": [],
+    "forbidden_automatic_triggers": [
+      "push",
+      "pull_request",
+      "schedule",
+      "watch_or_on_save",
+      "daily_patrol",
+      "routine_validation"
+    ]
+  },
   "candidate_capability_policy": {
     "official_hermes_backend_preserved": true,
     "official_hermes_desktop_ui_reused": true,

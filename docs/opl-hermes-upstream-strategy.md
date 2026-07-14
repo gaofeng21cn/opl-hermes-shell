@@ -28,6 +28,11 @@ Settings、语音等参考与显式回放，不承担 foreground 交付路线，
 的功能 backlog、WebUI 假设、验证负担或 adoption 叙事。只有 App owner 明确重新做
 候选决策时，Hermes 才能进入新的 promotion 评估。
 
+Hermes 默认只做 source/contract validation，不持续编译。完整 build、package、smoke
+和 install 只在实际 Hermes 开发需要 packaged evidence 时人工触发；push、pull request、
+schedule、watch/on-save、daily patrol 和 routine validation 都不得触发候选包编译。
+Hermes 不参加 Stable/Nightly release channel。
+
 ## 参考系
 
 当前参考基线：
@@ -193,6 +198,9 @@ Full runtime 或 WebUI parity 搬进来；同样不允许用一个返回空 sche
   smoke 会打开并聚焦 `.app` 以截取截图，必须显式传 `--allow-foreground`，并优先在
   VM/Tart 中运行；它不能进入默认 App-root candidate command chain，也不能作为
   `validate:candidate -- --require-app` 的隐含要求。
+- **执行策略**：默认 `npm run validate:candidate` 只做 source/contract validation。
+  build、package、packaged smoke 和 install 只在本次 Hermes 专项开发明确需要对应
+  evidence 时人工执行，不进入自动化或日常巡检。
 
 这些改动可以作为长期 OPL delta 存在，但应保持薄、可比较、可撤回。凡是让官方
 Hermes 设置页、skills、toolsets、MCP、profiles 或 cron 暗示普通可管理但背后没有
@@ -311,8 +319,9 @@ TODO：
    `follow_upstream`、`preserve_opl_delta`、`replace_with_opl_contract`、
    `hide_from_ordinary_ui`、`defer_until_feature_comparison`。
 5. 更新 `README_OPL.md` 的 evaluated ref 和本文件必要说明。
-6. 跑本仓 minimal candidate 验证；如果声称 App-root candidate 可选，还要跑 App repo
-   Hermes validation。
+6. 跑本仓 source-only minimal candidate 验证；只有本次改动确实需要 packaged evidence
+   时才人工 build/package/smoke。如果声称 App-root candidate 可选，还要跑 App repo
+   Hermes source validation。
 
 升级时不把 upstream 改动直接当成 OPL 产品决策。Hermes 的实现可以提供更好的默认
 组件和交互，但 OPL 普通路径、release path、runtime refs 和产品命名仍由 App repo
