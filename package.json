@@ -3,7 +3,7 @@
   "productName": "One Person Lab Hermes Candidate",
   "private": true,
   "version": "0.1.0",
-  "description": "One Person Lab candidate desktop shell derived from Hermes Desktop.",
+  "description": "Archived One Person Lab Hermes GUI provenance; product role retired.",
   "author": "One Person Lab",
   "type": "module",
   "main": "electron/main.cjs",
@@ -49,7 +49,8 @@
     "pack:opl": "node scripts/package-opl-candidate-app.cjs",
     "smoke:opl-first-run": "node scripts/smoke-opl-first-run.cjs",
     "smoke:settings-visual": "node scripts/smoke-settings-visual.cjs",
-    "validate:candidate": "node scripts/validate-hermes-codex-candidate.cjs"
+    "validate:archive": "node scripts/validate-hermes-codex-candidate.cjs",
+    "validate:candidate": "npm run validate:archive"
   },
   "dependencies": {
     "@assistant-ui/core": "0.1.17",

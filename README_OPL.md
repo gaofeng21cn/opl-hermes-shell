@@ -1,18 +1,18 @@
-# One Person Lab Hermes Retained Reference
+# One Person Lab Hermes Archive
 
 Owner: `opl-hermes-shell`
-Purpose: `hermes_desktop_retained_reference`
-State: `retained_reference_technical_verification_official_baseline_first`
-Machine boundary: 本文是人读 Hermes 技术参考说明。既有 `candidate` 包名和命令名
-只作为兼容标识。OPL App 产品真相仍在
-`/Users/gaofeng/workspace/one-person-lab-app` 的 contracts、docs、page-state
-matrix、release gates 和验证脚本中。
+Purpose: `hermes_desktop_archived_provenance`
+State: `retired_archived_read_only`
+Machine boundary: `contracts/opl-hermes-candidate-profile.json` 只声明归档终态。
+既有 `candidate` 包名、文件名和命令名只是历史实现标识。OPL App 产品真相仍在
+`one-person-lab-app` 的 contracts、docs、source 和 release gates 中。
 
-本仓是 One Person Lab App 保留的 Hermes Desktop 技术参考。它从官方
-`NousResearch/hermes-agent` 的 `apps/desktop` 复制而来，用于保留成熟桌面 UX、
-onboarding、跨平台 packaging、文件/预览、Settings 和语音等参考与显式回放能力。
-当前 active GUI 是 AionUI，唯一 foreground alternative 是 OPL Native Workbench；
-Hermes 不进入默认候选推进范围。
+本仓的 Hermes Desktop 产品角色已经退休，GitHub 仓库只保留完整历史与源代码作为
+read-only provenance。它不是候选、replay route、默认验证目标、开发 lane、release
+route 或维护参考，也没有 build、package、smoke、install 或 upstream intake 义务。
+重新打开需要新的 One Person Lab App 明确产品决策。
+
+以下内容保留归档前的实现背景，只用于历史阅读，不构成当前开发或发布指令。
 
 - upstream repository: `https://github.com/NousResearch/hermes-agent`
 - upstream subtree: `apps/desktop`
@@ -21,17 +21,17 @@ Hermes 不进入默认候选推进范围。
 - local shared package: `apps/shared` copied to `packages/shared`
 - candidate profile contract: `contracts/opl-hermes-candidate-profile.json`
 
-长期维护原则见
+归档前的历史维护原则见
 [`docs/opl-hermes-upstream-strategy.md`](docs/opl-hermes-upstream-strategy.md)。
-简要说，本仓必须把官方 Hermes Desktop 当成明确参考系：升级时先对照 upstream，
+历史上，本仓把官方 Hermes Desktop 当成明确参考系：升级时先对照 upstream，
 再重放最小 OPL delta。OPL 定制默认先保证官方 Hermes Desktop 的 UI、设置、skills、
 toolsets、MCP、profiles、cron、文件/预览和官方 baseline 能力继续可用；然后
 把 Codex/OPL/MAS 作为执行器或 agent route 扩展接入。不能把最小 Codex shim 当成
 完整 Hermes backend 替换，也不是把 AionUI/AGUI 稳定线能力闭着眼睛搬过来。
 
-## 当前参考边界
+## 归档前参考边界（历史）
 
-本仓只作为 App repo 的外部参考与 technical replay 载体。当前 active/release
+归档前，本仓只作为 App repo 的外部参考与 technical replay 载体。当时 active/release
 shell 仍是 AionUI，foreground alternative 是 OPL Native Workbench；只有显式使用
 App repo 的 Hermes adapter contract 时，App wrapper 才会选择 Hermes 兼容包：
 

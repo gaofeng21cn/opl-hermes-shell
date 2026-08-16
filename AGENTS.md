@@ -1,13 +1,14 @@
-# OPL Hermes Shell
+# OPL Hermes Shell Archive
 
-本仓是 One Person Lab App 的 Hermes retained-reference 与 candidate adapter 载体；App 产品 truth 留在 `one-person-lab-app`。
+本仓的 One Person Lab App 产品角色已经退休。仓库只保留完整 Git 历史和源代码作为
+read-only provenance；App 产品 truth 留在 `one-person-lab-app`。
 
-- 上游 Hermes Desktop 持有 shell body；本仓的 OPL-owned surface 是 branding、Codex app-server bridge、packaging/readback hooks 和 overlays。
-- 当前 GUI 角色以 App 的 `contracts/app-shell-adapter.json` 为准，AionUI 是 active shell，Hermes 用于对照和显式 candidate 验证。
-- Hermes 只用于技术验证。日常只跑 source-only 的 `npm run validate:candidate`；完整 build、package、smoke 和 install 仅在实际 Hermes 开发需要 packaged evidence 时人工触发，不得接入 push、pull request、schedule、watch/on-save、daily patrol 或 routine validation。
-- 上游同步与本地 delta 说明见 `docs/opl-hermes-upstream-strategy.md`。
+- 不再进行 upstream intake、候选推进、显式 replay、功能维护或兼容适配。
+- 不再承担 build、package、smoke、install、CI、巡检或 release 义务。
+- 既有 `candidate` 文件名、包名和命令名只是历史实现标识，不能恢复候选资格。
+- 重新打开本仓需要新的 One Person Lab App 明确产品决策。
 
-默认最小验证入口：`npm run validate:candidate`。
+归档终态的机器检查入口：`npm run validate:archive`。
 
 <!-- CODEGRAPH_START -->
 ## CodeGraph

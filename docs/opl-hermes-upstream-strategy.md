@@ -1,19 +1,20 @@
-# OPL Hermes Shell 上游参考系与定制原则
+# OPL Hermes Shell 归档前上游参考记录
 
 Owner: `opl-hermes-shell`
-Purpose: `upstream_reference_and_opl_customization_strategy`
-State: `retained_reference_guidance`
-Machine boundary: 本文是人读开发准则。Hermes 技术参考面的机器可读验证仍由
-`package.json`、`scripts/validate-hermes-codex-candidate.cjs`、App repo 的
-`contracts/shell-adapters/hermes-codex.json`、`contracts/app-shell-candidates.json`
-和 App-root validation 命令定义。
+Purpose: `archived_upstream_reference_provenance`
+State: `retired_archived_read_only`
+Machine boundary: 本文只保留归档前的上游与定制背景。当前机器状态由
+`contracts/opl-hermes-candidate-profile.json` 和 `npm run validate:archive` 证明。
 
-本文定义 `opl-hermes-shell` 的长期维护方式：把官方 Hermes Desktop 作为明确参考系，
-在这个成熟 GUI 基线之上做 OPL App 定制，而不是从零重写一个新桌面壳。
+`opl-hermes-shell` 已经退出 One Person Lab App 产品路线。仓库只保留完整 Git 历史和
+源代码作为 read-only provenance，不再进行 upstream intake、候选推进、显式 replay、
+构建、打包、smoke、安装、巡检或发布。重新打开必须先有新的 App 明确产品决策。
 
-## GUI 路线定位
+以下章节是归档前策略的历史快照，不是当前维护计划或 backlog。
 
-当前 App owner policy 已固定 GUI 路线：
+## GUI 路线定位（归档前历史）
+
+归档前的 App owner policy 曾按以下 GUI 路线记录：
 
 - AionUI 是 One Person Lab App 的 active GUI mainline，由 App 仓通过
   `shells/aionui` 消费 `opl-aion-shell`。

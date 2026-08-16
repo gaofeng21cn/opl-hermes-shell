@@ -1,5 +1,10 @@
 # Hermes Desktop ☤
 
+> **OPL archive notice:** One Person Lab 已退休此 Hermes GUI 候选。本仓仅保留完整
+> Git 历史和源代码作为只读 provenance，不再维护、构建、验证、打包、发布或跟随上游。
+> 下方内容是所归档 upstream snapshot 的历史说明，不是当前 OPL 安装或产品路线。
+> 重新启用必须由 One Person Lab App 作出新的明确产品决策。
+
 <p align="center">
   <a href="https://github.com/NousResearch/hermes-agent/releases"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-FFD700?style=for-the-badge" alt="Download"></a>
   <a href="https://hermes-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-hermes--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentation"></a>
@@ -83,28 +88,17 @@ npm run pack         # unpacked app under release/ (no installer)
 
 Installers are built and uploaded to GitHub Releases manually. macOS/Windows signing & notarization happen automatically when the relevant credentials are present in the environment (`CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_*` for macOS, `WIN_CSC_*` for Windows).
 
-### How it works in this OPL retained reference
+### OPL archive state
 
-This checkout is the retained One Person Lab Hermes technical reference. The
-official Hermes Desktop renderer, settings, onboarding, and packaging shape are
-preserved, while existing `candidate` package and command names remain only for
-compatibility with technical replay. The ordinary OPL path does not install
-Hermes Agent as the chat executor. First launch runs the OPL startup split:
-lightweight checks, one-time local initialization only when needed, gflabtoken
-model access, and deferred OPL maintenance. Chat runs through the OPL Codex
-gateway backed by `codex app-server --listen stdio://`.
+This checkout preserves the retired One Person Lab Hermes implementation and
+its source history. It is not a candidate, replay route, validation target,
+development lane, release route, or maintained reference. Existing `candidate`
+package and command names are historical implementation identifiers only.
+Reopening requires a new explicit One Person Lab App product decision.
 
-Within the current One Person Lab App GUI policy, AionUI remains the active
-mainline shell, OPL Native Workbench is the only foreground alternative, and
-this Hermes Desktop checkout is a retained reference. AGUI/CopilotKit is
-archived technical proof only. Neither retained nor archived references are a
-default validation scope or feature backlog for current GUI development.
-
-The packaged candidate app is built by `npm run package` and verified by
-`npm run smoke:opl-first-run`. The smoke launches the real `.app`, checks the
-branded macOS executable, verifies missing-key/configured/hot-launch/fallback
-startup paths, sends a fixture Codex app-server turn, and records MAS
-Skill-prompt evidence under `out/smoke-opl-first-run/summary.json`.
+The implementation, build instructions, and verification notes below are the
+archived snapshot's provenance. They do not create a current maintenance,
+packaging, smoke, installation, upstream-intake, or release obligation.
 
 ### Verification
 
